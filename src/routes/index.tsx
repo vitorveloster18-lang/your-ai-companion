@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import "../styles/agent.css";
 
 export const Route = createFileRoute("/")({
@@ -31,10 +31,48 @@ const STATUS_LABELS: Record<string, string> = {
   sad: "Triste",
 };
 
-type Bubble = { id: number; text: string; role: "user" | "agent" };
+type Bubble = { id: number; text: string; role: "user" | "agent"; ts: number };
 
 function generateId() {
   return Math.random().toString(36).substring(2, 15);
+}
+
+function formatTime(ts: number) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function ParticleBackground() {
+  const particles = useMemo(
+    () =>
+      Array.from({ length: 40 }).map((_, i) => ({
+        id: i,
+        left: Math.random() * 100,
+        size: Math.random() * 3 + 1,
+        duration: Math.random() * 20 + 15,
+        delay: Math.random() * 20,
+        opacity: Math.random() * 0.4 + 0.1,
+      })),
+    []
+  );
+  return (
+    <div className="particles" aria-hidden="true">
+      {particles.map((p) => (
+        <span
+          key={p.id}
+          className="particle"
+          style={{
+            left: `${p.left}%`,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            opacity: p.opacity,
+            animationDuration: `${p.duration}s`,
+            animationDelay: `${p.delay}s`,
+          }}
+        />
+      ))}
+    </div>
+  );
 }
 
 function AgentPage() {
@@ -42,11 +80,16 @@ function AgentPage() {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [sendPulse, setSendPulse] = useState(false);
 
   const sessionIdRef = useRef(generateId());
   const recognitionRef = useRef<any>(null);
   const chatAreaRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoARef = useRef<HTMLVideoElement>(null);
+  const videoBRef = useRef<HTMLVideoElement>(null);
+  const [activeLayer, setActiveLayer] = useState<"A" | "B">("A");
+  const [srcA, setSrcA] = useState(VIDEOS.idle);
+  const [srcB, setSrcB] = useState<string | null>(null);
   const stateRef = useRef("idle");
 
   const setState = useCallback((s: string) => {
@@ -54,24 +97,39 @@ function AgentPage() {
     setAgentState(s);
   }, []);
 
+  // Crossfade videos when state changes
   useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    const src = VIDEOS[agentState] || VIDEOS.idle;
-    if (!v.src.endsWith(src)) {
-      v.src = src;
-      v.play().catch(() => {});
+    const nextSrc = VIDEOS[agentState] || VIDEOS.idle;
+    const currentSrc = activeLayer === "A" ? srcA : srcB;
+    if (currentSrc === nextSrc) return;
+
+    if (activeLayer === "A") {
+      setSrcB(nextSrc);
+      requestAnimationFrame(() => {
+        videoBRef.current?.play().catch(() => {});
+        setActiveLayer("B");
+      });
+    } else {
+      setSrcA(nextSrc);
+      requestAnimationFrame(() => {
+        videoARef.current?.play().catch(() => {});
+        setActiveLayer("A");
+      });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentState]);
 
   useEffect(() => {
     if (chatAreaRef.current) {
       chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;
     }
-  }, [bubbles]);
+  }, [bubbles, agentState]);
 
   const addBubble = (text: string, role: "user" | "agent") => {
-    setBubbles((prev) => [...prev, { id: Date.now() + Math.random(), text, role }]);
+    setBubbles((prev) => [
+      ...prev,
+      { id: Date.now() + Math.random(), text, role, ts: Date.now() },
+    ]);
   };
 
   const speakText = (text: string, emotion: string) =>
@@ -105,6 +163,8 @@ function AgentPage() {
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+    setSendPulse(true);
+    setTimeout(() => setSendPulse(false), 300);
     addBubble(text, "user");
     setInput("");
     setState("thinking");
@@ -170,7 +230,9 @@ function AgentPage() {
   };
 
   return (
-    <>
+    <div className="agent-shell">
+      <ParticleBackground />
+
       <div className="status-bar">
         <div className={`status-dot ${agentState}`} />
         <span className="status-text">{STATUS_LABELS[agentState] || agentState}</span>
@@ -178,49 +240,98 @@ function AgentPage() {
 
       <div className="avatar-container">
         <div className={`avatar-glow ${agentState}`}>
-          <video ref={videoRef} id="avatarVideo" autoPlay loop muted playsInline>
-            <source src={VIDEOS.idle} type="video/mp4" />
-          </video>
+          <video
+            ref={videoARef}
+            className={`avatar-video ${activeLayer === "A" ? "active" : ""}`}
+            autoPlay
+            loop
+            muted
+            playsInline
+            src={srcA}
+          />
+          {srcB && (
+            <video
+              ref={videoBRef}
+              className={`avatar-video ${activeLayer === "B" ? "active" : ""}`}
+              autoPlay
+              loop
+              muted
+              playsInline
+              src={srcB}
+            />
+          )}
         </div>
       </div>
 
       <div className="chat-area" ref={chatAreaRef}>
         {bubbles.map((b) => (
-          <div key={b.id} className={`bubble ${b.role}`}>
-            {b.text}
+          <div key={b.id} className={`bubble-row ${b.role}`}>
+            {b.role === "agent" && (
+              <div className="bubble-avatar" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
+                </svg>
+              </div>
+            )}
+            <div className="bubble-wrap">
+              <div className={`bubble ${b.role}`}>{b.text}</div>
+              <div className="bubble-time">{formatTime(b.ts)}</div>
+            </div>
           </div>
         ))}
+        {agentState === "thinking" && (
+          <div className="bubble-row agent">
+            <div className="bubble-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
+              </svg>
+            </div>
+            <div className="bubble-wrap">
+              <div className="bubble agent typing">
+                <span className="dot" />
+                <span className="dot" />
+                <span className="dot" />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="input-area">
-        <button
-          className={`mic-button ${isRecording ? "recording" : ""}`}
-          onClick={() => (isRecording ? stopListening() : startListening())}
-          aria-label="Microfone"
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-          </svg>
-        </button>
+        <div className="input-glass">
+          <button
+            className={`mic-button ${isRecording ? "recording" : ""}`}
+            onClick={() => (isRecording ? stopListening() : startListening())}
+            aria-label="Microfone"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+            </svg>
+          </button>
 
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") sendMessage(input);
-          }}
-          placeholder="Digite uma mensagem..."
-          autoComplete="off"
-        />
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") sendMessage(input);
+            }}
+            placeholder="Digite uma mensagem..."
+            autoComplete="off"
+          />
 
-        <button className="send-button" onClick={() => sendMessage(input)} aria-label="Enviar">
-          <svg viewBox="0 0 24 24" fill="currentColor">
-            <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
-          </svg>
-        </button>
+          <button
+            className={`send-button ${sendPulse ? "clicked" : ""}`}
+            onClick={() => sendMessage(input)}
+            aria-label="Enviar"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+            </svg>
+          </button>
+        </div>
       </div>
-    </>
+    </div>
   );
 }
