@@ -1,26 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
 import "../styles/agent.css";
+import { SettingsPanel } from "@/components/SettingsPanel";
+import {
+  type AppSettings,
+  type AvatarStateName,
+  loadSettings,
+  resolveVideoSrc,
+} from "@/lib/settings";
 
 export const Route = createFileRoute("/")({
   component: AgentPage,
 });
-
-const CONFIG = {
-  supabaseUrl: "https://SEU-PROJETO.supabase.co",
-  supabaseKey: "SUA-CHAVE-ANON",
-  functionName: "chat",
-  language: "pt-BR",
-};
-
-const VIDEOS: Record<string, string> = {
-  idle: "/avatar/idle.mp4",
-  listening: "/avatar/listening.mp4",
-  thinking: "/avatar/thinking.mp4",
-  speaking: "/avatar/speaking.mp4",
-  happy: "/avatar/happy.mp4",
-  sad: "/avatar/sad.mp4",
-};
 
 const STATUS_LABELS: Record<string, string> = {
   idle: "Pronto",
@@ -76,30 +68,34 @@ function ParticleBackground() {
 }
 
 function AgentPage() {
-  const [agentState, setAgentState] = useState<string>("idle");
+  const [settings, setSettings] = useState<AppSettings>(() => loadSettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const [agentState, setAgentState] = useState<AvatarStateName>("idle");
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [sendPulse, setSendPulse] = useState(false);
 
-  const sessionIdRef = useRef(generateId());
   const recognitionRef = useRef<any>(null);
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const videoARef = useRef<HTMLVideoElement>(null);
   const videoBRef = useRef<HTMLVideoElement>(null);
   const [activeLayer, setActiveLayer] = useState<"A" | "B">("A");
-  const [srcA, setSrcA] = useState(VIDEOS.idle);
+  const [srcA, setSrcA] = useState(() => resolveVideoSrc("idle", loadSettings()));
   const [srcB, setSrcB] = useState<string | null>(null);
-  const stateRef = useRef("idle");
+  const stateRef = useRef<AvatarStateName>("idle");
+  const settingsRef = useRef(settings);
+  useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-  const setState = useCallback((s: string) => {
+  const setState = useCallback((s: AvatarStateName) => {
     stateRef.current = s;
     setAgentState(s);
   }, []);
 
-  // Crossfade videos when state changes
+  // Crossfade videos when state OR videoData changes
   useEffect(() => {
-    const nextSrc = VIDEOS[agentState] || VIDEOS.idle;
+    const nextSrc = resolveVideoSrc(agentState, settings);
     const currentSrc = activeLayer === "A" ? srcA : srcB;
     if (currentSrc === nextSrc) return;
 
@@ -117,7 +113,7 @@ function AgentPage() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agentState]);
+  }, [agentState, settings.videoData]);
 
   useEffect(() => {
     if (chatAreaRef.current) {
@@ -134,23 +130,28 @@ function AgentPage() {
 
   const speakText = (text: string, emotion: string) =>
     new Promise<void>((resolve) => {
-      if (!("speechSynthesis" in window)) {
+      const s = settingsRef.current;
+      if (!s.voiceEnabled || !("speechSynthesis" in window)) {
         setState("idle");
         resolve();
         return;
       }
       window.speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(text);
-      u.lang = CONFIG.language;
-      u.rate = 1.0;
-      u.pitch = 1.1;
+      u.lang = s.voiceLang;
+      u.rate = s.speechRate;
+      u.pitch = s.speechPitch;
+      const voices = window.speechSynthesis.getVoices();
+      const chosen = voices.find((v) => v.name === s.voiceName);
+      if (chosen) u.voice = chosen;
       u.onstart = () => setState("speaking");
       u.onend = () => {
-        if (emotion && emotion !== "idle" && VIDEOS[emotion]) {
-          setState(emotion);
-          setTimeout(() => setState("idle"), 2000);
+        const useEmotion = s.autoEmotion && emotion && emotion !== "idle";
+        if (useEmotion && (["happy","sad","listening","thinking","speaking"] as AvatarStateName[]).includes(emotion as AvatarStateName)) {
+          setState(emotion as AvatarStateName);
+          setTimeout(() => setState("idle"), s.emotionDuration * 1000);
         } else {
-          setState("idle");
+          setTimeout(() => setState("idle"), s.idleReturnDelay * 1000);
         }
         resolve();
       };
@@ -163,6 +164,7 @@ function AgentPage() {
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
+    const s = settingsRef.current;
     setSendPulse(true);
     setTimeout(() => setSendPulse(false), 300);
     addBubble(text, "user");
@@ -170,20 +172,23 @@ function AgentPage() {
     setState("thinking");
 
     try {
-      const url = `${CONFIG.supabaseUrl}/functions/v1/${CONFIG.functionName}`;
+      const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
       const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${CONFIG.supabaseKey}`,
+          Authorization: `Bearer ${s.supabaseKey}`,
         },
-        body: JSON.stringify({ message: text, session_id: sessionIdRef.current }),
+        body: JSON.stringify({ message: text, session_id: s.sessionId }),
       });
       if (!response.ok) throw new Error("Erro na API");
       const data = await response.json();
       const replyText = data.response || data.text || data.reply || "";
       const emotion = data.emotion || "idle";
       addBubble(replyText, "agent");
+      if (s.thinkingDelay > 0) {
+        await new Promise((r) => setTimeout(r, s.thinkingDelay * 1000));
+      }
       await speakText(replyText, emotion);
     } catch (e) {
       console.error(e);
@@ -202,13 +207,17 @@ function AgentPage() {
   };
 
   const startListening = () => {
+    if (!settingsRef.current.micEnabled) {
+      alert("Microfone desativado nas configurações.");
+      return;
+    }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) {
       alert("Seu navegador não suporta reconhecimento de voz. Use Chrome.");
       return;
     }
     const recognition = new SR();
-    recognition.lang = CONFIG.language;
+    recognition.lang = settingsRef.current.voiceLang;
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onstart = () => {
@@ -229,14 +238,31 @@ function AgentPage() {
     recognition.start();
   };
 
+  // Ensure session id exists
+  useEffect(() => {
+    if (!settings.sessionId) {
+      setSettings((s) => ({ ...s, sessionId: generateId() }));
+    }
+  }, [settings.sessionId]);
+
   return (
     <div className="agent-shell">
       <ParticleBackground />
 
-      <div className="status-bar">
-        <div className={`status-dot ${agentState}`} />
-        <span className="status-text">{STATUS_LABELS[agentState] || agentState}</span>
-      </div>
+      <button
+        className="settings-trigger"
+        onClick={() => setSettingsOpen(true)}
+        aria-label="Configurações"
+      >
+        <SettingsIcon />
+      </button>
+
+      {settings.showStatus && (
+        <div className="status-bar">
+          <div className={`status-dot ${agentState}`} />
+          <span className="status-text">{STATUS_LABELS[agentState] || agentState}</span>
+        </div>
+      )}
 
       <div className="avatar-container">
         <div className={`avatar-glow ${agentState}`}>
@@ -244,7 +270,7 @@ function AgentPage() {
             ref={videoARef}
             className={`avatar-video ${activeLayer === "A" ? "active" : ""}`}
             autoPlay
-            loop
+            loop={settings.videoLoop[agentState] ?? true}
             muted
             playsInline
             src={srcA}
@@ -254,7 +280,7 @@ function AgentPage() {
               ref={videoBRef}
               className={`avatar-video ${activeLayer === "B" ? "active" : ""}`}
               autoPlay
-              loop
+              loop={settings.videoLoop[agentState] ?? true}
               muted
               playsInline
               src={srcB}
@@ -263,39 +289,41 @@ function AgentPage() {
         </div>
       </div>
 
-      <div className="chat-area" ref={chatAreaRef}>
-        {bubbles.map((b) => (
-          <div key={b.id} className={`bubble-row ${b.role}`}>
-            {b.role === "agent" && (
+      {settings.showBubbles && (
+        <div className="chat-area" ref={chatAreaRef}>
+          {bubbles.map((b) => (
+            <div key={b.id} className={`bubble-row ${b.role}`}>
+              {b.role === "agent" && (
+                <div className="bubble-avatar" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
+                  </svg>
+                </div>
+              )}
+              <div className="bubble-wrap">
+                <div className={`bubble ${b.role}`}>{b.text}</div>
+                <div className="bubble-time">{formatTime(b.ts)}</div>
+              </div>
+            </div>
+          ))}
+          {agentState === "thinking" && (
+            <div className="bubble-row agent">
               <div className="bubble-avatar" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
                 </svg>
               </div>
-            )}
-            <div className="bubble-wrap">
-              <div className={`bubble ${b.role}`}>{b.text}</div>
-              <div className="bubble-time">{formatTime(b.ts)}</div>
-            </div>
-          </div>
-        ))}
-        {agentState === "thinking" && (
-          <div className="bubble-row agent">
-            <div className="bubble-avatar" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
-              </svg>
-            </div>
-            <div className="bubble-wrap">
-              <div className="bubble agent typing">
-                <span className="dot" />
-                <span className="dot" />
-                <span className="dot" />
+              <div className="bubble-wrap">
+                <div className="bubble agent typing">
+                  <span className="dot" />
+                  <span className="dot" />
+                  <span className="dot" />
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <div className="input-area">
         <div className="input-glass">
@@ -303,6 +331,7 @@ function AgentPage() {
             className={`mic-button ${isRecording ? "recording" : ""}`}
             onClick={() => (isRecording ? stopListening() : startListening())}
             aria-label="Microfone"
+            disabled={!settings.micEnabled}
           >
             <svg viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
@@ -332,6 +361,13 @@ function AgentPage() {
           </button>
         </div>
       </div>
+
+      <SettingsPanel
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onChange={setSettings}
+      />
     </div>
   );
 }
