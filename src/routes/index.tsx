@@ -115,6 +115,16 @@ function AgentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentState, settings.videoData]);
 
+  // Auto-return to idle for non-looping emotion states (happy/sad)
+  useEffect(() => {
+    if (agentState === "happy" || agentState === "sad") {
+      if (!settings.videoLoop[agentState]) {
+        const t = setTimeout(() => setState("idle"), settings.emotionDuration * 1000);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [agentState, settings.videoLoop, settings.emotionDuration, setState]);
+
   useEffect(() => {
     if (chatAreaRef.current) {
       chatAreaRef.current.scrollTop = chatAreaRef.current.scrollHeight;

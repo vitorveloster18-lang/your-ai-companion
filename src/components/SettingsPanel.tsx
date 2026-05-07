@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AvatarCreator } from "./AvatarCreator";
 import {
   AVATAR_STATES,
   type AppSettings,
@@ -21,6 +22,7 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
   const [draft, setDraft] = useState<AppSettings>(settings);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testStatus, setTestStatus] = useState<"idle" | "ok" | "err" | "loading">("idle");
+  const [creatorOpen, setCreatorOpen] = useState(false);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
@@ -127,7 +129,21 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
         </header>
 
         <div className="settings-body">
-          {/* SECTION 1 — CONNECTION */}
+          <button
+            className="creator-launcher"
+            onClick={() => setCreatorOpen(true)}
+          >
+            <span className="wand">
+              <svg viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7.5 5.6L10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7zm12 9.8L17 14l1.4 2.5L17 19l2.5-1.4L22 19l-1.4-2.5L22 14zM22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5zm-7.63 5.29c-.39-.39-1.02-.39-1.41 0L1.29 18.96c-.39.39-.39 1.02 0 1.41l2.34 2.34c.39.39 1.02.39 1.41 0L16.7 11.05c.39-.39.39-1.02 0-1.41z"/>
+              </svg>
+            </span>
+            <div className="creator-info">
+              <b>✨ Avatar Creator</b>
+              <span>Gere os 6 estados do seu avatar com IA</span>
+            </div>
+          </button>
+
           <section className="settings-section">
             <h3>Conexão</h3>
             <label>Supabase URL
@@ -292,6 +308,17 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
           <button className="btn-primary" onClick={handleSave}>Salvar</button>
         </footer>
       </aside>
+
+      <AvatarCreator
+        open={creatorOpen}
+        onClose={() => setCreatorOpen(false)}
+        settings={draft}
+        onChange={(s) => {
+          setDraft(s);
+          saveSettings(s);
+          onChange(s);
+        }}
+      />
     </>
   );
 }
