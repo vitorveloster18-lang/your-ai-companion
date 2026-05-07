@@ -22,6 +22,7 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
   const [draft, setDraft] = useState<AppSettings>(settings);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testStatus, setTestStatus] = useState<"idle" | "ok" | "err" | "loading">("idle");
+  const [creatorOpen, setCreatorOpen] = useState(false);
   const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
