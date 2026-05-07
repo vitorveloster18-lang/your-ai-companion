@@ -24,6 +24,32 @@ export const DEFAULT_VIDEOS: Record<AvatarStateName, string> = {
   sad: "/avatar/sad.mp4",
 };
 
+export const DEFAULT_STATE_PROMPTS: Record<AvatarStateName, string> = {
+  idle:
+    "Anime girl standing still, gentle breathing animation, slight body sway, eyes blinking slowly, calm and peaceful expression, soft light, seamless loop",
+  listening:
+    "Anime girl tilting head slightly, attentive expression, eyes wide open and focused, leaning forward gently, curious and engaged look, soft glow around her, seamless loop",
+  thinking:
+    "Anime girl looking up slightly, thoughtful expression, finger on chin, eyes moving as if thinking, subtle head movement, dreamy atmosphere, seamless loop",
+  speaking:
+    "Anime girl mouth moving naturally, talking expression, expressive eyes, gentle hand gesture, confident and warm look, seamless loop",
+  happy:
+    "Anime girl smiling brightly, eyes closed in happiness, small celebratory gesture, sparkling effect around her, joyful and energetic expression",
+  sad:
+    "Anime girl looking down softly, slightly sad expression, gentle melancholic mood, eyes with subtle tears, slow breathing, empathetic look",
+};
+
+export const DEFAULT_STATE_DURATIONS: Record<AvatarStateName, number> = {
+  idle: 5,
+  listening: 4,
+  thinking: 4,
+  speaking: 5,
+  happy: 4,
+  sad: 4,
+};
+
+export type ApiProvider = "replicate" | "did" | "stability" | "custom";
+
 export type AppSettings = {
   // Connection
   supabaseUrl: string;
@@ -44,12 +70,20 @@ export type AppSettings = {
   micEnabled: boolean;
 
   // Sync
-  thinkingDelay: number; // s
-  emotionDuration: number; // s
-  idleReturnDelay: number; // s
+  thinkingDelay: number;
+  emotionDuration: number;
+  idleReturnDelay: number;
   autoEmotion: boolean;
   showBubbles: boolean;
   showStatus: boolean;
+
+  // Avatar Creator
+  referenceImage: string; // base64 data URL
+  apiProvider: ApiProvider;
+  apiKey: string;
+  customApiUrl: string;
+  statePrompts: Record<AvatarStateName, string>;
+  stateDurations: Record<AvatarStateName, number>;
 };
 
 const SETTINGS_KEY = "agent.settings.v1";
@@ -70,8 +104,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     listening: true,
     thinking: true,
     speaking: true,
-    happy: true,
-    sad: true,
+    happy: false,
+    sad: false,
   },
 
   voiceEnabled: true,
@@ -87,6 +121,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoEmotion: true,
   showBubbles: true,
   showStatus: true,
+
+  referenceImage: "",
+  apiProvider: "replicate",
+  apiKey: "",
+  customApiUrl: "",
+  statePrompts: { ...DEFAULT_STATE_PROMPTS },
+  stateDurations: { ...DEFAULT_STATE_DURATIONS },
 };
 
 export function loadSettings(): AppSettings {
@@ -95,9 +136,13 @@ export function loadSettings(): AppSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_SETTINGS, ...parsed,
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
       videoLoop: { ...DEFAULT_SETTINGS.videoLoop, ...(parsed.videoLoop || {}) },
       videoData: { ...(parsed.videoData || {}) },
+      statePrompts: { ...DEFAULT_STATE_PROMPTS, ...(parsed.statePrompts || {}) },
+      stateDurations: { ...DEFAULT_STATE_DURATIONS, ...(parsed.stateDurations || {}) },
     };
   } catch {
     return DEFAULT_SETTINGS;
