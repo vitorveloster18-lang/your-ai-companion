@@ -308,6 +308,17 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
           <button className="btn-primary" onClick={handleSave}>Salvar</button>
         </footer>
       </aside>
+
+      <AvatarCreator
+        open={creatorOpen}
+        onClose={() => setCreatorOpen(false)}
+        settings={draft}
+        onChange={(s) => {
+          setDraft(s);
+          saveSettings(s);
+          onChange(s);
+        }}
+      />
     </>
   );
 }
