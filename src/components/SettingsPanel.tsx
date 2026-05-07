@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { AvatarCreator } from "./AvatarCreator";
 import {
   AVATAR_STATES,
   type AppSettings,
