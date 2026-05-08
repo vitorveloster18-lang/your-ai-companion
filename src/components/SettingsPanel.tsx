@@ -1,10 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { AvatarCreator } from "./AvatarCreator";
 import {
-  AVATAR_STATES,
   type AppSettings,
-  type AvatarStateName,
   DEFAULT_SETTINGS,
   saveSettings,
 } from "@/lib/settings";
@@ -23,11 +21,8 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testStatus, setTestStatus] = useState<"idle" | "ok" | "err" | "loading">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
-  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
-  useEffect(() => {
-    if (open) setDraft(settings);
-  }, [open, settings]);
+  useEffect(() => { if (open) setDraft(settings); }, [open, settings]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -40,41 +35,13 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
     setDraft((d) => ({ ...d, [key]: value }));
   };
 
-  const handleVideoUpload = (state: AvatarStateName, file: File) => {
-    if (!file.type.includes("mp4") && !file.name.endsWith(".mp4")) {
-      toast.error("Apenas arquivos .mp4");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      setDraft((d) => ({
-        ...d,
-        videoData: { ...d.videoData, [state]: dataUrl },
-      }));
-      toast.success(`Vídeo ${state} carregado`);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removeVideo = (state: AvatarStateName) => {
-    setDraft((d) => {
-      const next = { ...d.videoData };
-      delete next[state];
-      return { ...d, videoData: next };
-    });
-  };
-
   const testConnection = async () => {
     setTestStatus("loading");
     try {
       const url = `${draft.supabaseUrl}/functions/v1/${draft.functionName}`;
       const r = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${draft.supabaseKey}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${draft.supabaseKey}` },
         body: JSON.stringify({ message: "hello", session_id: draft.sessionId }),
       });
       if (!r.ok) throw new Error(`${r.status}`);
@@ -90,9 +57,7 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
   const testVoice = () => {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(
-      "Olá, esta é uma frase de teste do meu agente."
-    );
+    const u = new SpeechSynthesisUtterance("Olá, esta é uma frase de teste do meu agente.");
     u.lang = draft.voiceLang;
     u.rate = draft.speechRate;
     u.pitch = draft.speechPitch;
@@ -116,23 +81,15 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
 
   return (
     <>
-      <div
-        className={`settings-overlay ${open ? "open" : ""}`}
-        onClick={onClose}
-      />
+      <div className={`settings-overlay ${open ? "open" : ""}`} onClick={onClose} />
       <aside className={`settings-panel ${open ? "open" : ""}`}>
         <header className="settings-header">
           <h2>Configurações</h2>
-          <button className="settings-close" onClick={onClose} aria-label="Fechar">
-            ✕
-          </button>
+          <button className="settings-close" onClick={onClose} aria-label="Fechar">✕</button>
         </header>
 
         <div className="settings-body">
-          <button
-            className="creator-launcher"
-            onClick={() => setCreatorOpen(true)}
-          >
+          <button className="creator-launcher" onClick={() => setCreatorOpen(true)}>
             <span className="wand">
               <svg viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7.5 5.6L10 7 8.6 4.5 10 2 7.5 3.4 5 2l1.4 2.5L5 7zm12 9.8L17 14l1.4 2.5L17 19l2.5-1.4L22 19l-1.4-2.5L22 14zM22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5zm-7.63 5.29c-.39-.39-1.02-.39-1.41 0L1.29 18.96c-.39.39-.39 1.02 0 1.41l2.34 2.34c.39.39 1.02.39 1.41 0L16.7 11.05c.39-.39.39-1.02 0-1.41z"/>
@@ -140,27 +97,23 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
             </span>
             <div className="creator-info">
               <b>✨ Avatar Creator</b>
-              <span>Gere os 6 estados do seu avatar com IA</span>
+              <span>Carregue os 18 vídeos do seu avatar</span>
             </div>
           </button>
 
           <section className="settings-section">
             <h3>Conexão</h3>
             <label>Supabase URL
-              <input value={draft.supabaseUrl}
-                onChange={(e) => update("supabaseUrl", e.target.value)} />
+              <input value={draft.supabaseUrl} onChange={(e) => update("supabaseUrl", e.target.value)} />
             </label>
             <label>Anon Key
-              <input value={draft.supabaseKey}
-                onChange={(e) => update("supabaseKey", e.target.value)} />
+              <input value={draft.supabaseKey} onChange={(e) => update("supabaseKey", e.target.value)} />
             </label>
             <label>Edge Function
-              <input value={draft.functionName}
-                onChange={(e) => update("functionName", e.target.value)} />
+              <input value={draft.functionName} onChange={(e) => update("functionName", e.target.value)} />
             </label>
             <label>Session ID
-              <input value={draft.sessionId}
-                onChange={(e) => update("sessionId", e.target.value)} />
+              <input value={draft.sessionId} onChange={(e) => update("sessionId", e.target.value)} />
             </label>
             <button className="btn-primary" onClick={testConnection}>
               {testStatus === "loading" ? "Testando..." : "Testar Conexão"}
@@ -169,64 +122,25 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
             </button>
           </section>
 
-          {/* SECTION 2 — AVATAR VIDEOS */}
           <section className="settings-section">
-            <h3>Vídeos do Avatar</h3>
-            {AVATAR_STATES.map((state) => {
-              const loaded = !!draft.videoData[state];
-              return (
-                <div key={state} className="video-row">
-                  <div className="video-row-head">
-                    <span className="state-label">{state}</span>
-                    {loaded && <span className="check ok">✓</span>}
-                  </div>
-                  {loaded && (
-                    <video
-                      className="video-thumb"
-                      src={draft.videoData[state]}
-                      muted
-                      loop
-                      autoPlay
-                      playsInline
-                    />
-                  )}
-                  <div className="video-actions">
-                    <input
-                      type="file"
-                      accept="video/mp4"
-                      ref={(el) => { fileInputs.current[state] = el; }}
-                      style={{ display: "none" }}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleVideoUpload(state, f);
-                        e.target.value = "";
-                      }}
-                    />
-                    <button className="btn-ghost"
-                      onClick={() => fileInputs.current[state]?.click()}>
-                      Upload
-                    </button>
-                    {loaded && (
-                      <button className="btn-ghost danger"
-                        onClick={() => removeVideo(state)}>
-                        Remover
-                      </button>
-                    )}
-                    <label className="toggle-inline">
-                      <input type="checkbox"
-                        checked={draft.videoLoop[state]}
-                        onChange={(e) =>
-                          update("videoLoop", { ...draft.videoLoop, [state]: e.target.checked })
-                        } />
-                      Loop
-                    </label>
-                  </div>
-                </div>
-              );
-            })}
+            <h3>Palco do Avatar</h3>
+            <label>Atraso para voltar ao standby ({draft.standbyDelay.toFixed(1)}s)
+              <input type="range" min={1} max={10} step={0.5}
+                value={draft.standbyDelay}
+                onChange={(e) => update("standbyDelay", parseFloat(e.target.value))} />
+            </label>
+            <label>Duração da transição standby ({draft.standbyTransitionDuration.toFixed(1)}s)
+              <input type="range" min={0.3} max={2} step={0.1}
+                value={draft.standbyTransitionDuration}
+                onChange={(e) => update("standbyTransitionDuration", parseFloat(e.target.value))} />
+            </label>
+            <label className="toggle-row">
+              <span>Iniciar em modo standby</span>
+              <input type="checkbox" checked={draft.startInStandby}
+                onChange={(e) => update("startInStandby", e.target.checked)} />
+            </label>
           </section>
 
-          {/* SECTION 3 — VOICE */}
           <section className="settings-section">
             <h3>Voz</h3>
             <label className="toggle-row">
@@ -254,9 +168,7 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
               <select value={draft.voiceName}
                 onChange={(e) => update("voiceName", e.target.value)}>
                 <option value="">(padrão do navegador)</option>
-                {voices.map((v) => (
-                  <option key={v.name} value={v.name}>{v.name} — {v.lang}</option>
-                ))}
+                {voices.map((v) => (<option key={v.name} value={v.name}>{v.name} — {v.lang}</option>))}
               </select>
             </label>
             <label className="toggle-row">
@@ -267,7 +179,6 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
             <button className="btn-ghost" onClick={testVoice}>Testar Voz</button>
           </section>
 
-          {/* SECTION 4 — SYNC */}
           <section className="settings-section">
             <h3>Sincronização</h3>
             <label>Atraso de pensar ({draft.thinkingDelay.toFixed(2)}s)
