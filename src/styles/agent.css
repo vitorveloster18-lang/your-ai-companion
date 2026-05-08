@@ -757,3 +757,102 @@ body {
   text-transform: uppercase; color: #4a4d75;
   letter-spacing: 0.8px;
 }
+
+/* ===== AVATAR CREATOR — TABS & CARDS ===== */
+.ready-bar {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 14px;
+  font-size: 12px; color: #4a4d75;
+}
+.ready-bar-track {
+  flex: 1; height: 8px; border-radius: 100px;
+  background: rgba(80,90,180,0.12); overflow: hidden;
+}
+.ready-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6b7dff, #9b7dff, #00cc77);
+  transition: width 0.3s ease;
+}
+
+.tab-row {
+  display: flex; gap: 6px;
+  margin-bottom: 14px;
+  padding: 4px;
+  background: #f0f2fa;
+  border-radius: 100px;
+}
+.tab-pill {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  border: none;
+  background: transparent;
+  border-radius: 100px;
+  color: #6b6e9e;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.tab-pill.active {
+  background: #fff;
+  color: #2a2a3e;
+  box-shadow: 0 2px 8px rgba(80,90,180,0.15);
+}
+
+.video-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 600px) {
+  .video-cards { grid-template-columns: 1fr 1fr; }
+}
+.video-card {
+  background: #f6f7fc;
+  border: 1px solid rgba(80,90,180,0.1);
+  border-radius: 12px;
+  padding: 12px;
+  transition: all 0.2s;
+}
+.video-card.ready {
+  background: #f0fbf3;
+  border-color: rgba(0,170,100,0.25);
+}
+.video-card-head {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 6px;
+}
+.vc-emoji { font-size: 22px; }
+.vc-meta { flex: 1; min-width: 0; }
+.vc-meta b { display: block; font-size: 13px; color: #2a2a3e; }
+.vc-meta small {
+  font-family: ui-monospace, monospace;
+  font-size: 10px; color: #6b6e9e;
+}
+.vc-desc { font-size: 11px; color: #5a5e7a; margin: 4px 0; line-height: 1.4; }
+.vc-when { font-size: 10px; color: #6b6e9e; margin: 2px 0; }
+.vc-triggers {
+  font-size: 10px; color: #6b6e9e;
+  margin: 4px 0;
+  padding: 4px 8px;
+  background: rgba(120,130,220,0.06);
+  border-radius: 6px;
+}
+.vc-triggers b { color: #4a4d75; }
+.vc-thumb {
+  width: 100%; height: 90px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #e6e8f2;
+  margin: 8px 0;
+}
+.vc-thumb.empty {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: #9b9eba;
+  background: linear-gradient(135deg, #eef0fa, #e6e8f2);
+}
+.vc-actions {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+}
+.vc-actions .btn-ghost { padding: 6px 10px; font-size: 11px; }
