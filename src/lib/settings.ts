@@ -1,52 +1,143 @@
-export type AvatarStateName =
+// All 18 video keys
+export type VideoKey =
+  // Base loops
+  | "standby"
   | "idle"
   | "listening"
   | "thinking"
   | "speaking"
+  // Transitions
+  | "enter"
+  | "leave"
+  | "standby_to_listening"
+  | "listening_to_standby"
+  | "standby_to_speaking"
+  | "speaking_to_standby"
+  // Emotions (happy is also a base loop)
   | "happy"
-  | "sad";
+  | "sad"
+  | "shy"
+  | "smug"
+  | "surprised"
+  | "confused"
+  | "angry"
+  | "sleepy";
 
-export const AVATAR_STATES: AvatarStateName[] = [
-  "idle",
-  "listening",
-  "thinking",
-  "speaking",
-  "happy",
-  "sad",
+// Backward-compat alias: many places used AvatarStateName
+export type AvatarStateName = VideoKey;
+
+export type VideoCategory = "loop" | "transition" | "emotion";
+
+export type VideoMeta = {
+  key: VideoKey;
+  filename: string;
+  category: VideoCategory;
+  emoji: string;
+  label: string;
+  description: string;
+  when: string;
+  defaultLoop: boolean;
+  triggers?: string[]; // emotion trigger words (pt-BR)
+};
+
+export const VIDEO_LIBRARY: VideoMeta[] = [
+  // ===== LOOPS =====
+  { key: "standby", filename: "standby.mp4", category: "loop", emoji: "🌅", label: "Standby",
+    description: "Vista lateral, completamente parada, esperando",
+    when: "Ao abrir o app e após cada interação", defaultLoop: true },
+  { key: "idle", filename: "idle.mp4", category: "loop", emoji: "🌙", label: "Idle",
+    description: "Em pé, respirando suavemente",
+    when: "Momento ativo breve", defaultLoop: true },
+  { key: "listening", filename: "listening.mp4", category: "loop", emoji: "👂", label: "Listening",
+    description: "Atenta, focada no usuário",
+    when: "Usuário está falando", defaultLoop: true },
+  { key: "thinking", filename: "thinking.mp4", category: "loop", emoji: "💭", label: "Thinking",
+    description: "Processando resposta",
+    when: "Esperando o agente", defaultLoop: true },
+  { key: "speaking", filename: "speaking.mp4", category: "loop", emoji: "🗣️", label: "Speaking",
+    description: "Falando, expressiva",
+    when: "Agente respondendo", defaultLoop: true },
+  { key: "happy", filename: "happy.mp4", category: "loop", emoji: "😊", label: "Happy",
+    description: "Expressão alegre",
+    when: "Loop base e gatilho de emoção", defaultLoop: true,
+    triggers: ["ótimo","otimo","maravilhoso","feliz","alegre","perfeito","excelente","adorei","amei"] },
+
+  // ===== TRANSITIONS =====
+  { key: "enter", filename: "enter.mp4", category: "transition", emoji: "🚪", label: "Enter",
+    description: "Entrada do avatar",
+    when: "App abre", defaultLoop: false },
+  { key: "leave", filename: "leave.mp4", category: "transition", emoji: "👋", label: "Leave",
+    description: "Saída do avatar",
+    when: "Sessão termina", defaultLoop: false },
+  { key: "standby_to_listening", filename: "standby_to_listening.mp4", category: "transition", emoji: "↗️", label: "Standby → Listening",
+    description: "Vira-se para ouvir",
+    when: "Usuário começa a falar", defaultLoop: false },
+  { key: "listening_to_standby", filename: "listening_to_standby.mp4", category: "transition", emoji: "↙️", label: "Listening → Standby",
+    description: "Volta ao standby",
+    when: "Usuário para de falar", defaultLoop: false },
+  { key: "standby_to_speaking", filename: "standby_to_speaking.mp4", category: "transition", emoji: "↗️", label: "Standby → Speaking",
+    description: "Prepara para falar",
+    when: "Agente vai responder", defaultLoop: false },
+  { key: "speaking_to_standby", filename: "speaking_to_standby.mp4", category: "transition", emoji: "↙️", label: "Speaking → Standby",
+    description: "Termina de falar",
+    when: "Agente termina", defaultLoop: false },
+
+  // ===== EMOTIONS =====
+  { key: "sad", filename: "sad.mp4", category: "emotion", emoji: "😢", label: "Sad",
+    description: "Expressão triste",
+    when: "Palavras tristes na resposta", defaultLoop: false,
+    triggers: ["triste","lamento","sinto muito","desculpe","infelizmente","pena"] },
+  { key: "shy", filename: "shy.mp4", category: "emotion", emoji: "☺️", label: "Shy",
+    description: "Tímida",
+    when: "Palavras ternas", defaultLoop: false,
+    triggers: ["envergonhada","tímida","timida","que fofo","obrigada","fico sem graça"] },
+  { key: "smug", filename: "smug.mp4", category: "emotion", emoji: "😏", label: "Smug",
+    description: "Convencida",
+    when: "Palavras óbvias", defaultLoop: false,
+    triggers: ["claro","obviamente","sabia","como eu disse","naturalmente"] },
+  { key: "surprised", filename: "surprised.mp4", category: "emotion", emoji: "😲", label: "Surprised",
+    description: "Surpresa",
+    when: "Palavras de surpresa", defaultLoop: false,
+    triggers: ["incrível","incrivel","surpreendente","uau","não acredito","nao acredito","sério","serio"] },
+  { key: "confused", filename: "confused.mp4", category: "emotion", emoji: "😕", label: "Confused",
+    description: "Confusa",
+    when: "Palavras de confusão", defaultLoop: false,
+    triggers: ["não entendi","nao entendi","pode repetir","confuso","não tenho certeza","nao tenho certeza","como assim"] },
+  { key: "angry", filename: "angry.mp4", category: "emotion", emoji: "😠", label: "Angry",
+    description: "Irritada",
+    when: "Palavras de raiva", defaultLoop: false,
+    triggers: ["não gosto","nao gosto","irritante","chateada","isso é errado","isso e errado","pare"] },
+  { key: "sleepy", filename: "sleepy.mp4", category: "emotion", emoji: "😴", label: "Sleepy",
+    description: "Sonolenta",
+    when: "Palavras de cansaço", defaultLoop: false,
+    triggers: ["cansada","sono","dormir","descansando","que horas são","que horas sao"] },
 ];
 
-export const DEFAULT_VIDEOS: Record<AvatarStateName, string> = {
-  idle: "/avatar/idle.mp4",
-  listening: "/avatar/listening.mp4",
-  thinking: "/avatar/thinking.mp4",
-  speaking: "/avatar/speaking.mp4",
-  happy: "/avatar/happy.mp4",
-  sad: "/avatar/sad.mp4",
-};
+export const VIDEO_KEYS = VIDEO_LIBRARY.map((v) => v.key) as VideoKey[];
+export const AVATAR_STATES: VideoKey[] = VIDEO_KEYS;
 
-export const DEFAULT_STATE_PROMPTS: Record<AvatarStateName, string> = {
-  idle:
-    "Anime girl standing still, gentle breathing animation, slight body sway, eyes blinking slowly, calm and peaceful expression, soft light, seamless loop",
-  listening:
-    "Anime girl tilting head slightly, attentive expression, eyes wide open and focused, leaning forward gently, curious and engaged look, soft glow around her, seamless loop",
-  thinking:
-    "Anime girl looking up slightly, thoughtful expression, finger on chin, eyes moving as if thinking, subtle head movement, dreamy atmosphere, seamless loop",
-  speaking:
-    "Anime girl mouth moving naturally, talking expression, expressive eyes, gentle hand gesture, confident and warm look, seamless loop",
-  happy:
-    "Anime girl smiling brightly, eyes closed in happiness, small celebratory gesture, sparkling effect around her, joyful and energetic expression",
-  sad:
-    "Anime girl looking down softly, slightly sad expression, gentle melancholic mood, eyes with subtle tears, slow breathing, empathetic look",
-};
+export const DEFAULT_VIDEOS: Record<VideoKey, string> = VIDEO_LIBRARY.reduce(
+  (acc, v) => { acc[v.key] = `/avatar/${v.filename}`; return acc; },
+  {} as Record<VideoKey, string>
+);
 
-export const DEFAULT_STATE_DURATIONS: Record<AvatarStateName, number> = {
-  idle: 5,
-  listening: 4,
-  thinking: 4,
-  speaking: 5,
-  happy: 4,
-  sad: 4,
-};
+export const DEFAULT_LOOP: Record<VideoKey, boolean> = VIDEO_LIBRARY.reduce(
+  (acc, v) => { acc[v.key] = v.defaultLoop; return acc; },
+  {} as Record<VideoKey, boolean>
+);
+
+export const DEFAULT_STATE_PROMPTS: Record<VideoKey, string> = VIDEO_LIBRARY.reduce(
+  (acc, v) => {
+    acc[v.key] = `Anime girl, ${v.label.toLowerCase()} state — ${v.description}, soft cinematic light, ${v.defaultLoop ? "seamless loop" : "single take"}`;
+    return acc;
+  },
+  {} as Record<VideoKey, string>
+);
+
+export const DEFAULT_STATE_DURATIONS: Record<VideoKey, number> = VIDEO_LIBRARY.reduce(
+  (acc, v) => { acc[v.key] = v.category === "loop" ? 5 : 3; return acc; },
+  {} as Record<VideoKey, number>
+);
 
 export type ApiProvider = "replicate" | "did" | "stability" | "custom";
 
@@ -57,9 +148,9 @@ export type AppSettings = {
   functionName: string;
   sessionId: string;
 
-  // Avatar videos: base64 data URLs (or empty for default file)
-  videoData: Partial<Record<AvatarStateName, string>>;
-  videoLoop: Record<AvatarStateName, boolean>;
+  // Videos
+  videoData: Partial<Record<VideoKey, string>>;
+  videoLoop: Record<VideoKey, boolean>;
 
   // Voice
   voiceEnabled: boolean;
@@ -77,13 +168,18 @@ export type AppSettings = {
   showBubbles: boolean;
   showStatus: boolean;
 
+  // Stage behavior (NEW)
+  standbyDelay: number;          // seconds to wait before returning to standby
+  standbyTransitionDuration: number; // seconds for the standby crossfade
+  startInStandby: boolean;
+
   // Avatar Creator
-  referenceImage: string; // base64 data URL
+  referenceImage: string;
   apiProvider: ApiProvider;
   apiKey: string;
   customApiUrl: string;
-  statePrompts: Record<AvatarStateName, string>;
-  stateDurations: Record<AvatarStateName, number>;
+  statePrompts: Record<VideoKey, string>;
+  stateDurations: Record<VideoKey, number>;
 };
 
 const SETTINGS_KEY = "agent.settings.v1";
@@ -99,14 +195,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sessionId: makeSessionId(),
 
   videoData: {},
-  videoLoop: {
-    idle: true,
-    listening: true,
-    thinking: true,
-    speaking: true,
-    happy: false,
-    sad: false,
-  },
+  videoLoop: { ...DEFAULT_LOOP },
 
   voiceEnabled: true,
   speechRate: 1.0,
@@ -121,6 +210,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoEmotion: true,
   showBubbles: true,
   showStatus: true,
+
+  standbyDelay: 3,
+  standbyTransitionDuration: 1,
+  startInStandby: true,
 
   referenceImage: "",
   apiProvider: "replicate",
@@ -139,7 +232,7 @@ export function loadSettings(): AppSettings {
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
-      videoLoop: { ...DEFAULT_SETTINGS.videoLoop, ...(parsed.videoLoop || {}) },
+      videoLoop: { ...DEFAULT_LOOP, ...(parsed.videoLoop || {}) },
       videoData: { ...(parsed.videoData || {}) },
       statePrompts: { ...DEFAULT_STATE_PROMPTS, ...(parsed.statePrompts || {}) },
       stateDurations: { ...DEFAULT_STATE_DURATIONS, ...(parsed.stateDurations || {}) },
@@ -157,9 +250,23 @@ export function saveSettings(s: AppSettings) {
   }
 }
 
-export function resolveVideoSrc(
-  state: AvatarStateName,
-  settings: AppSettings,
-): string {
-  return settings.videoData[state] || DEFAULT_VIDEOS[state];
+/** Returns user-uploaded data URL, or null if unavailable (so caller can fallback / skip). */
+export function getVideoSrc(key: VideoKey, settings: AppSettings): string | null {
+  return settings.videoData[key] || null;
+}
+
+/** Compatibility: returns user data URL or default file path (may 404 if absent). */
+export function resolveVideoSrc(key: VideoKey, settings: AppSettings): string {
+  return settings.videoData[key] || DEFAULT_VIDEOS[key];
+}
+
+/** Detects an emotion video key from text using triggers. Returns null if none. */
+export function detectEmotion(text: string): VideoKey | null {
+  const lower = text.toLowerCase();
+  const emotions = VIDEO_LIBRARY.filter((v) => v.category === "emotion" || v.key === "happy");
+  for (const e of emotions) {
+    if (!e.triggers) continue;
+    if (e.triggers.some((t) => lower.includes(t))) return e.key;
+  }
+  return null;
 }
