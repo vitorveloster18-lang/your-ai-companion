@@ -22,29 +22,40 @@ body {
   overflow: hidden;
   background: #f0f0f5;
   transition: opacity 1s ease;
+  border-radius: 0;
 }
 .stage-shell.fading { opacity: 0; }
 
 .stage-bg {
   position: fixed;
   inset: 0;
-  z-index: 0;
-}
-.stage-video {
-  position: fixed;
-  top: 0;
-  left: 0;
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  object-fit: cover;
-  border: none;
+  z-index: 0;
+  overflow: hidden;
+  border: 0;
   border-radius: 0;
+  clip-path: none;
+}
+.stage-video {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  min-width: 100vw;
+  min-height: 100dvh;
+  object-fit: cover;
+  object-position: center center;
+  border: none;
+  border-radius: 0 !important;
   clip-path: none;
   opacity: 0;
   transition: opacity 0.5s ease-in-out;
   pointer-events: none;
   z-index: 0;
+  background: #f0f0f5;
 }
 .stage-video.active { opacity: 1; }
 
