@@ -5,6 +5,8 @@ import {
   type VideoKey,
   type VideoCategory,
   VIDEO_LIBRARY,
+  uploadAvatarVideo,
+  deleteAvatarVideo,
 } from "@/lib/settings";
 
 type Props = {
