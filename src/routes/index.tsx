@@ -187,13 +187,14 @@ function AgentPage() {
         if (!sid) return;
         const cloudVideos = await loadAvatarVideos(sid);
         if (cancelled || Object.keys(cloudVideos).length === 0) return;
-        setSettings((s) => {
-          const merged = { ...s, videoData: { ...s.videoData, ...cloudVideos } };
-          settingsRef.current = merged;
-          saveSettings(merged);
-          return merged;
-        });
-        const trans = settingsRef.current.standbyTransitionDuration * 1000;
+        const merged = {
+          ...settingsRef.current,
+          videoData: { ...settingsRef.current.videoData, ...cloudVideos },
+        };
+        settingsRef.current = merged;
+        saveSettings(merged);
+        setSettings(merged);
+        const trans = merged.standbyTransitionDuration * 1000;
         runSequence([{ key: "standby", loop: true, transitionMs: trans }]);
       } catch (e) { console.warn("Cloud video load failed", e); }
     })();
