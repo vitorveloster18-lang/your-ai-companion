@@ -7,8 +7,10 @@ import {
   type AppSettings,
   type VideoKey,
   loadSettings,
+  saveSettings,
   getVideoSrc,
   detectEmotion,
+  loadAvatarVideos,
   VIDEO_LIBRARY,
 } from "@/lib/settings";
 
