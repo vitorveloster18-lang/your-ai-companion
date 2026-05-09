@@ -33,29 +33,36 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
   const ready = VIDEO_LIBRARY.filter((v) => !!draft.videoData[v.key]).length;
   const total = VIDEO_LIBRARY.length;
 
-  const upload = (key: VideoKey, file: File) => {
+  const upload = async (key: VideoKey, file: File) => {
     if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
       toast.error("Apenas arquivos .mp4");
       return;
     }
-    if (file.size > 25 * 1024 * 1024) {
-      toast.error("Arquivo muito grande (máx 25MB)");
+    if (file.size > 50 * 1024 * 1024) {
+      toast.error("Arquivo muito grande (máx 50MB)");
       return;
     }
-    const r = new FileReader();
-    r.onload = () => {
-      setDraft((d) => ({ ...d, videoData: { ...d.videoData, [key]: r.result as string } }));
-      toast.success(`Vídeo ${key} carregado`);
-    };
-    r.readAsDataURL(file);
+    try {
+      toast.loading(`Enviando ${key}...`, { id: `up-${key}` });
+      const url = await uploadAvatarVideo(key, file, draft.sessionId);
+      setDraft((d) => ({ ...d, videoData: { ...d.videoData, [key]: url } }));
+      toast.success(`Vídeo ${key} salvo na nuvem`, { id: `up-${key}` });
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Falha ao enviar: ${e?.message || "erro"}`, { id: `up-${key}` });
+    }
   };
 
-  const remove = (key: VideoKey) => {
+  const remove = async (key: VideoKey) => {
+    try {
+      await deleteAvatarVideo(key, draft.sessionId);
+    } catch (e) { console.warn(e); }
     setDraft((d) => {
       const next = { ...d.videoData };
       delete next[key];
       return { ...d, videoData: next };
     });
+    toast.success("Vídeo removido");
   };
 
   const apply = () => {
