@@ -188,7 +188,7 @@ function AgentPage() {
         const cloudVideos = await loadAvatarVideos(sid);
         if (cancelled || Object.keys(cloudVideos).length === 0) return;
         setSettings((s) => {
-          merged.videoData = { ...s.videoData, ...cloudVideos };
+          const merged = { ...s, videoData: { ...s.videoData, ...cloudVideos } };
           settingsRef.current = merged;
           saveSettings(merged);
           return merged;
