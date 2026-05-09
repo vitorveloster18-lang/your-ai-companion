@@ -7,8 +7,10 @@ import {
   type AppSettings,
   type VideoKey,
   loadSettings,
+  saveSettings,
   getVideoSrc,
   detectEmotion,
+  loadAvatarVideos,
   VIDEO_LIBRARY,
 } from "@/lib/settings";
 
@@ -175,6 +177,27 @@ function AgentPage() {
     },
     [playVideo]
   );
+
+  // Load videos from cloud storage on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sid = settingsRef.current.sessionId;
+        if (!sid) return;
+        const cloudVideos = await loadAvatarVideos(sid);
+        if (cancelled || Object.keys(cloudVideos).length === 0) return;
+        setSettings((s) => {
+          const merged = { ...s, videoData: { ...cloudVideos, ...s.videoData } };
+          // Cloud is source of truth — overwrite stale local entries
+          merged.videoData = { ...s.videoData, ...cloudVideos };
+          saveSettings(merged);
+          return merged;
+        });
+      } catch (e) { console.warn("Cloud video load failed", e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   // ON APP OPEN
   useEffect(() => {
@@ -389,36 +412,22 @@ function AgentPage() {
         </div>
       )}
 
-      {settings.showBubbles && visibleBubbles.length > 0 && (
-        <div className="floating-bubbles">
-          {visibleBubbles.map((b) => (
-            <div key={b.id} className={`bubble-row ${b.role}`}>
-              {b.role === "agent" && (
-                <div className="bubble-avatar" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
-                  </svg>
-                </div>
-              )}
-              <div className="bubble-wrap">
-                <div className={`bubble ${b.role}`}>{b.text}</div>
-                <div className="bubble-time">{formatTime(b.ts)}</div>
-              </div>
+      {settings.showBubbles && (visibleBubbles.length > 0 || agentState === "thinking") && (
+        <div className="subtitle-area">
+          {agentState === "thinking" ? (
+            <div className="subtitle thinking">
+              <span className="dot" /><span className="dot" /><span className="dot" />
             </div>
-          ))}
-          {agentState === "thinking" && (
-            <div className="bubble-row agent">
-              <div className="bubble-avatar" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 12c2.7 0 5-2.3 5-5s-2.3-5-5-5-5 2.3-5 5 2.3 5 5 5zm0 2c-3.3 0-10 1.7-10 5v3h20v-3c0-3.3-6.7-5-10-5z" />
-                </svg>
-              </div>
-              <div className="bubble-wrap">
-                <div className="bubble agent typing">
-                  <span className="dot" /><span className="dot" /><span className="dot" />
+          ) : (
+            (() => {
+              const last = visibleBubbles[visibleBubbles.length - 1];
+              return last ? (
+                <div key={last.id} className={`subtitle ${last.role}`}>
+                  {last.role === "user" && <span className="subtitle-tag">você</span>}
+                  <span className="subtitle-text">{last.text}</span>
                 </div>
-              </div>
-            </div>
+              ) : null;
+            })()
           )}
         </div>
       )}
