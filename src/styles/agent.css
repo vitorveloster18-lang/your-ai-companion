@@ -134,14 +134,18 @@ body {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   color: #6b6e9e;
   gap: 12px;
+  border: 0;
+  border-radius: 0;
+  clip-path: none;
 }
 .placeholder-pulse {
-  width: 200px; height: 200px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #c5cdff, #d8c5ff, #c5e4ff);
+  width: min(86vw, 520px);
+  height: min(58vh, 420px);
+  border-radius: 0;
+  background: linear-gradient(135deg, #edf1ff, #f3edff, #eaf7ff);
   background-size: 200% 200%;
   animation: gradientPulse 4s ease infinite;
-  box-shadow: 0 20px 60px rgba(120,130,220,0.3);
+  box-shadow: 0 24px 70px rgba(120,130,220,0.22);
 }
 @keyframes gradientPulse {
   0%,100% { background-position: 0% 50%; transform: scale(1); }
