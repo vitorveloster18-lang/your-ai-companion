@@ -255,6 +255,49 @@ export function getVideoSrc(key: VideoKey, settings: AppSettings): string | null
   return settings.videoData[key] || null;
 }
 
+// ===== Storage helpers =====
+import { supabase } from "@/integrations/supabase/client";
+
+const BUCKET = "avatar-videos";
+
+export async function uploadAvatarVideo(
+  key: VideoKey,
+  file: File,
+  sessionId: string
+): Promise<string> {
+  const path = `${sessionId}/${key}.mp4`;
+  const { error } = await supabase.storage
+    .from(BUCKET)
+    .upload(path, file, { upsert: true, contentType: "video/mp4" });
+  if (error) throw error;
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  // bust cache
+  return `${data.publicUrl}?t=${Date.now()}`;
+}
+
+export async function deleteAvatarVideo(key: VideoKey, sessionId: string) {
+  const path = `${sessionId}/${key}.mp4`;
+  await supabase.storage.from(BUCKET).remove([path]);
+}
+
+export async function loadAvatarVideos(
+  sessionId: string
+): Promise<Partial<Record<VideoKey, string>>> {
+  const { data, error } = await supabase.storage.from(BUCKET).list(sessionId);
+  if (error || !data) return {};
+  const out: Partial<Record<VideoKey, string>> = {};
+  for (const f of data) {
+    const key = f.name.replace(/\.mp4$/, "") as VideoKey;
+    if (VIDEO_KEYS.includes(key)) {
+      const { data: pub } = supabase.storage
+        .from(BUCKET)
+        .getPublicUrl(`${sessionId}/${f.name}`);
+      out[key] = pub.publicUrl;
+    }
+  }
+  return out;
+}
+
 /** Compatibility: returns user data URL or default file path (may 404 if absent). */
 export function resolveVideoSrc(key: VideoKey, settings: AppSettings): string {
   return settings.videoData[key] || DEFAULT_VIDEOS[key];
