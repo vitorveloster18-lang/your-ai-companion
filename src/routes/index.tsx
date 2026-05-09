@@ -188,8 +188,6 @@ function AgentPage() {
         const cloudVideos = await loadAvatarVideos(sid);
         if (cancelled || Object.keys(cloudVideos).length === 0) return;
         setSettings((s) => {
-          const merged = { ...s, videoData: { ...cloudVideos, ...s.videoData } };
-          // Cloud is source of truth — overwrite stale local entries
           merged.videoData = { ...s.videoData, ...cloudVideos };
           settingsRef.current = merged;
           saveSettings(merged);
