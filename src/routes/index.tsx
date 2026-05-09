@@ -191,17 +191,16 @@ function AgentPage() {
           const merged = { ...s, videoData: { ...cloudVideos, ...s.videoData } };
           // Cloud is source of truth — overwrite stale local entries
           merged.videoData = { ...s.videoData, ...cloudVideos };
+          settingsRef.current = merged;
           saveSettings(merged);
           return merged;
         });
-        if (!srcA && !srcB) {
-          const trans = settingsRef.current.standbyTransitionDuration * 1000;
-          runSequence([{ key: "standby", loop: true, transitionMs: trans }]);
-        }
+        const trans = settingsRef.current.standbyTransitionDuration * 1000;
+        runSequence([{ key: "standby", loop: true, transitionMs: trans }]);
       } catch (e) { console.warn("Cloud video load failed", e); }
     })();
     return () => { cancelled = true; };
-  }, [runSequence, srcA, srcB]);
+  }, [runSequence]);
 
   // ON APP OPEN
   useEffect(() => {
