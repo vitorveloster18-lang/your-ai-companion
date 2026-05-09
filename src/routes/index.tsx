@@ -187,17 +187,19 @@ function AgentPage() {
         if (!sid) return;
         const cloudVideos = await loadAvatarVideos(sid);
         if (cancelled || Object.keys(cloudVideos).length === 0) return;
-        setSettings((s) => {
-          const merged = { ...s, videoData: { ...cloudVideos, ...s.videoData } };
-          // Cloud is source of truth — overwrite stale local entries
-          merged.videoData = { ...s.videoData, ...cloudVideos };
-          saveSettings(merged);
-          return merged;
-        });
+        const merged = {
+          ...settingsRef.current,
+          videoData: { ...settingsRef.current.videoData, ...cloudVideos },
+        };
+        settingsRef.current = merged;
+        saveSettings(merged);
+        setSettings(merged);
+        const trans = merged.standbyTransitionDuration * 1000;
+        runSequence([{ key: "standby", loop: true, transitionMs: trans }]);
       } catch (e) { console.warn("Cloud video load failed", e); }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [runSequence]);
 
   // ON APP OPEN
   useEffect(() => {

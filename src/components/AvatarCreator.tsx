@@ -7,6 +7,7 @@ import {
   VIDEO_LIBRARY,
   uploadAvatarVideo,
   deleteAvatarVideo,
+  saveSettings,
 } from "@/lib/settings";
 
 type Props = {
@@ -45,7 +46,12 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
     try {
       toast.loading(`Enviando ${key}...`, { id: `up-${key}` });
       const url = await uploadAvatarVideo(key, file, draft.sessionId);
-      setDraft((d) => ({ ...d, videoData: { ...d.videoData, [key]: url } }));
+      setDraft((d) => {
+        const next = { ...d, videoData: { ...d.videoData, [key]: url } };
+        saveSettings(next);
+        onChange(next);
+        return next;
+      });
       toast.success(`Vídeo ${key} salvo na nuvem`, { id: `up-${key}` });
     } catch (e: any) {
       console.error(e);
@@ -60,7 +66,10 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
     setDraft((d) => {
       const next = { ...d.videoData };
       delete next[key];
-      return { ...d, videoData: next };
+      const updated = { ...d, videoData: next };
+      saveSettings(updated);
+      onChange(updated);
+      return updated;
     });
     toast.success("Vídeo removido");
   };

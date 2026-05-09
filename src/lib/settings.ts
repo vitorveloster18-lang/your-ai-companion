@@ -260,6 +260,31 @@ import { supabase } from "@/integrations/supabase/client";
 
 const BUCKET = "avatar-videos";
 
+async function loadVideosForSession(
+  sessionId: string
+): Promise<{ videos: Partial<Record<VideoKey, string>>; latest: number }> {
+  const { data, error } = await supabase.storage.from(BUCKET).list(sessionId, {
+    limit: 100,
+    sortBy: { column: "name", order: "asc" },
+  });
+  if (error || !data) return { videos: {}, latest: 0 };
+
+  const videos: Partial<Record<VideoKey, string>> = {};
+  let latest = 0;
+  for (const f of data) {
+    const key = f.name.replace(/\.mp4$/, "") as VideoKey;
+    if (VIDEO_KEYS.includes(key)) {
+      const stamp = Date.parse(f.updated_at || f.created_at || "") || 0;
+      latest = Math.max(latest, stamp);
+      const { data: pub } = supabase.storage
+        .from(BUCKET)
+        .getPublicUrl(`${sessionId}/${f.name}`);
+      videos[key] = `${pub.publicUrl}${stamp ? `?t=${stamp}` : ""}`;
+    }
+  }
+  return { videos, latest };
+}
+
 export async function uploadAvatarVideo(
   key: VideoKey,
   file: File,
@@ -283,19 +308,25 @@ export async function deleteAvatarVideo(key: VideoKey, sessionId: string) {
 export async function loadAvatarVideos(
   sessionId: string
 ): Promise<Partial<Record<VideoKey, string>>> {
-  const { data, error } = await supabase.storage.from(BUCKET).list(sessionId);
-  if (error || !data) return {};
-  const out: Partial<Record<VideoKey, string>> = {};
-  for (const f of data) {
-    const key = f.name.replace(/\.mp4$/, "") as VideoKey;
-    if (VIDEO_KEYS.includes(key)) {
-      const { data: pub } = supabase.storage
-        .from(BUCKET)
-        .getPublicUrl(`${sessionId}/${f.name}`);
-      out[key] = pub.publicUrl;
+  const current = await loadVideosForSession(sessionId);
+  if (Object.keys(current.videos).length > 0) return current.videos;
+
+  const { data: folders } = await supabase.storage.from(BUCKET).list("", {
+    limit: 100,
+    sortBy: { column: "updated_at", order: "desc" },
+  });
+
+  let best = current;
+  for (const folder of folders || []) {
+    if (!folder.name || folder.name.includes(".")) continue;
+    const candidate = await loadVideosForSession(folder.name);
+    const bestCount = Object.keys(best.videos).length;
+    const candidateCount = Object.keys(candidate.videos).length;
+    if (candidateCount > bestCount || (candidateCount === bestCount && candidate.latest > best.latest)) {
+      best = candidate;
     }
   }
-  return out;
+  return best.videos;
 }
 
 /** Compatibility: returns user data URL or default file path (may 404 if absent). */
