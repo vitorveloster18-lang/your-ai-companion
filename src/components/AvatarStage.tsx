@@ -116,19 +116,28 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         setTimeout(() => { if (el.onended) done(); }, 15000);
       },
       setStandby(_key) {
-        const el = standbyRef.current;
-        if (!el) return;
+        const a = standbyARef.current;
         const src = getVideoSrc("standby", settingsRef.current);
-        if (!src) return;
-        if (el.src !== src) el.src = src;
-        el.loop = true;
-        el.play().catch(() => {});
+        if (!a || !src) return;
+        if (a.src !== src) a.src = src;
+        a.play().catch(() => {});
       },
     }));
 
     return (
       <div id="stage">
-        <video id="layer-standby" ref={standbyRef} autoPlay loop muted playsInline />
+        <video
+          id="layer-standby"
+          ref={standbyARef}
+          autoPlay muted playsInline
+          onTimeUpdate={() => handleStandbyTimeUpdate("A")}
+        />
+        <video
+          id="layer-standby-b"
+          ref={standbyBRef}
+          muted playsInline
+          onTimeUpdate={() => handleStandbyTimeUpdate("B")}
+        />
         <video id="layer-state" ref={stateRef} muted playsInline />
         <video id="layer-transition" ref={transitionRef} muted playsInline />
         <video id="layer-emotion" ref={emotionRef} muted playsInline />
