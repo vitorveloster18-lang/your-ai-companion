@@ -3,15 +3,14 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
 import "../styles/agent.css";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { AvatarStage, type AvatarStageHandle } from "@/components/AvatarStage";
 import {
   type AppSettings,
   type VideoKey,
   loadSettings,
   saveSettings,
-  getVideoSrc,
   detectEmotion,
   loadAvatarVideos,
-  VIDEO_LIBRARY,
 } from "@/lib/settings";
 
 export const Route = createFileRoute("/")({ component: AgentPage });
@@ -41,9 +40,6 @@ const STATUS_LABELS: Record<string, string> = {
 type Bubble = { id: number; text: string; role: "user" | "agent"; ts: number };
 
 function generateId() { return Math.random().toString(36).substring(2, 15); }
-function formatTime(ts: number) {
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
 
 const BUBBLE_TIMEOUT = 8000;
 const MAX_VISIBLE_BUBBLES = 3;
@@ -62,168 +58,62 @@ function AgentPage() {
   const [fadeOut, setFadeOut] = useState(false);
 
   const recognitionRef = useRef<any>(null);
-  const videoARef = useRef<HTMLVideoElement>(null);
-  const videoBRef = useRef<HTMLVideoElement>(null);
-  const [activeLayer, setActiveLayer] = useState<"A" | "B">("A");
-  const [srcA, setSrcA] = useState<string | null>(null);
-  const [srcB, setSrcB] = useState<string | null>(null);
-  const [labelA, setLabelA] = useState<string>("standby");
-  const [labelB, setLabelB] = useState<string>("");
+  const stageRef = useRef<AvatarStageHandle>(null);
   const settingsRef = useRef(settings);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-  // Cleanup bubbles after timeout
+  // Bubble cleanup
   useEffect(() => {
     if (bubbles.length === 0) return;
     const timers = bubbles.map((b) =>
-      setTimeout(() => {
-        setBubbles((prev) => prev.filter((x) => x.id !== b.id));
-      }, BUBBLE_TIMEOUT - (Date.now() - b.ts))
+      setTimeout(() => setBubbles((prev) => prev.filter((x) => x.id !== b.id)),
+        BUBBLE_TIMEOUT - (Date.now() - b.ts))
     );
     return () => timers.forEach(clearTimeout);
   }, [bubbles]);
 
-  const activeLayerRef = useRef<"A" | "B">("A");
-  const CROSSFADE_MS = 300;
+  // Stage helpers (promise-based wrappers around the imperative API)
+  const playTransition = useCallback((key: VideoKey) => new Promise<void>((res) => {
+    setAgentState(key);
+    stageRef.current?.playTransition(key, () => res());
+  }), []);
+  const showState = useCallback((key: VideoKey, loop = true) => {
+    setAgentState(key);
+    stageRef.current?.showState(key, loop);
+  }, []);
+  const hideState = useCallback(() => new Promise<void>((res) => {
+    stageRef.current?.hideState(() => res());
+  }), []);
+  const playEmotion = useCallback((key: VideoKey) => new Promise<void>((res) => {
+    stageRef.current?.playEmotion(key, () => res());
+  }), []);
 
-  /** Play one clip on the inactive layer, crossfade in, and:
-   *  - For non-loop clips: resolve when the video ENDS naturally (transition fully played).
-   *  - For loop clips: resolve once the crossfade-in completes.
-   *  Always pauses the previously active layer after the crossfade. */
-  const playVideo = useCallback(
-    (key: VideoKey, opts: { loop?: boolean; maxMs?: number } = {}) => {
-      return new Promise<void>((resolve) => {
-        const s = settingsRef.current;
-        const src = getVideoSrc(key, s);
-        const meta = VIDEO_LIBRARY.find((v) => v.key === key);
-        const looping = opts.loop ?? (meta?.defaultLoop ?? false);
-
-        setAgentState(key);
-
-        if (!src) {
-          // No asset — skip silently (transitions) or hold placeholder (loops)
-          resolve();
-          return;
-        }
-
-        const fromLayer = activeLayerRef.current;
-        const toLayer = fromLayer === "A" ? "B" : "A";
-        const fromEl = fromLayer === "A" ? videoARef.current : videoBRef.current;
-        const toElGetter = () => (toLayer === "A" ? videoARef.current : videoBRef.current);
-
-        if (toLayer === "B") { setSrcB(src); setLabelB(key); }
-        else                  { setSrcA(src); setLabelA(key); }
-
-        let resolved = false;
-        const finish = () => {
-          if (resolved) return;
-          resolved = true;
-          // Pause previous layer to ensure only one video plays at a time.
-          if (fromEl) { try { fromEl.pause(); } catch {} }
-          resolve();
-        };
-
-        // Wait until the new <video> element exists with the new src, then start.
-        requestAnimationFrame(() => {
-          const target = toElGetter();
-          if (!target) { finish(); return; }
-          target.loop = looping;
-          target.currentTime = 0;
-          target.muted = true;
-
-          const start = () => {
-            target.play().catch(() => {});
-            // Crossfade — flip active layer
-            activeLayerRef.current = toLayer;
-            setActiveLayer(toLayer);
-
-            if (looping) {
-              // Resolve once fade-in completes; loop continues until next call.
-              setTimeout(finish, CROSSFADE_MS);
-            } else {
-              const onEnded = () => {
-                target.removeEventListener("ended", onEnded);
-                finish();
-              };
-              target.addEventListener("ended", onEnded);
-              // Safety: if 'ended' never fires
-              setTimeout(() => {
-                target.removeEventListener("ended", onEnded);
-                finish();
-              }, opts.maxMs ?? 15000);
-            }
-          };
-
-          if (target.readyState >= 2) start();
-          else {
-            const onReady = () => {
-              target.removeEventListener("loadeddata", onReady);
-              start();
-            };
-            target.addEventListener("loadeddata", onReady);
-            // Safety in case loadeddata never fires
-            setTimeout(start, 400);
-          }
-        });
-      });
-    },
-    []
-  );
-
-  // Sequence runner — strictly sequential, cancellable
-  const seqIdRef = useRef(0);
-
-  const runSequence = useCallback(
-    async (steps: Array<{ key: VideoKey; loop?: boolean; transitionMs?: number; maxMs?: number; afterMs?: number }>) => {
-      const id = ++seqIdRef.current;
-      for (const step of steps) {
-        if (id !== seqIdRef.current) return; // preempted
-        await playVideo(step.key, { loop: step.loop, maxMs: step.maxMs });
-        if (id !== seqIdRef.current) return;
-        if (step.afterMs) {
-          await new Promise((r) => setTimeout(r, step.afterMs));
-        }
-      }
-    },
-    [playVideo]
-  );
-
-  // Load videos from cloud storage on mount
+  // Load videos from cloud and run enter sequence
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const sid = settingsRef.current.sessionId;
-        if (!sid) return;
-        const cloudVideos = await loadAvatarVideos(sid);
-        if (cancelled || Object.keys(cloudVideos).length === 0) return;
-        const merged = {
-          ...settingsRef.current,
-          videoData: { ...settingsRef.current.videoData, ...cloudVideos },
-        };
-        settingsRef.current = merged;
-        saveSettings(merged);
-        setSettings(merged);
-        const trans = merged.standbyTransitionDuration * 1000;
-        runSequence([{ key: "standby", loop: true, transitionMs: trans }]);
+        if (sid) {
+          const cloudVideos = await loadAvatarVideos(sid);
+          if (!cancelled && Object.keys(cloudVideos).length > 0) {
+            const merged = {
+              ...settingsRef.current,
+              videoData: { ...settingsRef.current.videoData, ...cloudVideos },
+            };
+            settingsRef.current = merged;
+            saveSettings(merged);
+            setSettings(merged);
+          }
+        }
       } catch (e) { console.warn("Cloud video load failed", e); }
+      if (cancelled) return;
+      // standby layer auto-runs; play enter once on top
+      await playTransition("enter");
+      setAgentState("standby");
     })();
     return () => { cancelled = true; };
-  }, [runSequence]);
-
-  // ON APP OPEN
-  useEffect(() => {
-    const s = settingsRef.current;
-    const trans = s.standbyTransitionDuration * 1000;
-    runSequence([
-      { key: "enter", loop: false, transitionMs: trans },
-      { key: "standby", loop: true, transitionMs: trans },
-    ]);
-    return () => {
-      window.speechSynthesis?.cancel();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [playTransition]);
 
   const addBubble = (text: string, role: "user" | "agent") => {
     setBubbles((prev) => [...prev, { id: Date.now() + Math.random(), text, role, ts: Date.now() }]);
@@ -254,13 +144,10 @@ function AgentPage() {
     addBubble(text, "user");
     setInput("");
 
-    const trans = s.standbyTransitionDuration * 1000;
-
-    // listening_to_standby → thinking (we treat the user already finished typing)
-    runSequence([
-      { key: "listening_to_standby", loop: false, transitionMs: trans },
-      { key: "thinking", loop: true, transitionMs: trans },
-    ]);
+    // user stops talking → listening_to_standby → thinking
+    await hideState();
+    await playTransition("listening_to_standby");
+    showState("thinking", true);
 
     try {
       const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
@@ -277,32 +164,33 @@ function AgentPage() {
 
       if (s.thinkingDelay > 0) await new Promise((r) => setTimeout(r, s.thinkingDelay * 1000));
 
-      // standby_to_speaking → speaking (loop)
-      const speakSeq = runSequence([
-        { key: "standby_to_speaking", loop: false, transitionMs: trans },
-        { key: "speaking", loop: true, transitionMs: trans },
-      ]);
+      // hide thinking → standby_to_speaking → speaking
+      await hideState();
+      await playTransition("standby_to_speaking");
+      showState("speaking", true);
 
-      // Speak audio simultaneously
-      await Promise.all([speakSeq, speakText(replyText)]);
-
-      // Detect emotion (server-provided wins, otherwise scan text)
       const detected = (apiEmotion as VideoKey) || (s.autoEmotion ? detectEmotion(replyText) : null);
 
-      const finalSteps: Array<{ key: VideoKey; loop?: boolean; transitionMs?: number; maxMs?: number; afterMs?: number }> = [];
+      // Speak audio + optional emotion overlay
+      const tasks: Promise<void>[] = [speakText(replyText)];
       if (detected) {
-        finalSteps.push({ key: detected, loop: false, transitionMs: trans, maxMs: s.emotionDuration * 1000 + 4000 });
+        tasks.push(new Promise<void>((res) => {
+          setTimeout(() => playEmotion(detected).then(res), 1000);
+        }));
       }
-      finalSteps.push({ key: "speaking_to_standby", loop: false, transitionMs: trans });
-      finalSteps.push({ key: "standby", loop: true, transitionMs: trans, afterMs: s.standbyDelay * 1000 });
-      runSequence(finalSteps);
+      await Promise.all(tasks);
+
+      // Finish: hide speaking → speaking_to_standby
+      await hideState();
+      if (s.standbyDelay > 0) await new Promise((r) => setTimeout(r, s.standbyDelay * 1000));
+      await playTransition("speaking_to_standby");
+      setAgentState("standby");
     } catch (e) {
       console.error(e);
       addBubble("Algo deu errado. Tente novamente.", "agent");
-      runSequence([
-        { key: "speaking_to_standby", loop: false },
-        { key: "standby", loop: true },
-      ]);
+      await hideState();
+      await playTransition("speaking_to_standby");
+      setAgentState("standby");
     }
   };
 
@@ -323,13 +211,10 @@ function AgentPage() {
     recognition.lang = s.voiceLang;
     recognition.interimResults = false;
     recognition.continuous = false;
-    const trans = s.standbyTransitionDuration * 1000;
-    recognition.onstart = () => {
+    recognition.onstart = async () => {
       setIsRecording(true);
-      runSequence([
-        { key: "standby_to_listening", loop: false, transitionMs: trans },
-        { key: "listening", loop: true, transitionMs: trans },
-      ]);
+      await playTransition("standby_to_listening");
+      showState("listening", true);
     };
     recognition.onresult = (event: any) => {
       const text = event.results[0][0].transcript;
@@ -342,14 +227,10 @@ function AgentPage() {
     recognition.start();
   };
 
-  // First focus on input → trigger standby_to_listening (subtle)
-  const onInputFocus = () => {
+  const onInputFocus = async () => {
     if (agentState === "standby") {
-      const trans = settingsRef.current.standbyTransitionDuration * 1000;
-      runSequence([
-        { key: "standby_to_listening", loop: false, transitionMs: trans },
-        { key: "listening", loop: true, transitionMs: trans },
-      ]);
+      await playTransition("standby_to_listening");
+      showState("listening", true);
     }
   };
 
@@ -362,53 +243,29 @@ function AgentPage() {
   useEffect(() => {
     const handler = () => {
       setFadeOut(true);
-      const s = settingsRef.current;
-      const trans = s.standbyTransitionDuration * 1000;
-      runSequence([{ key: "leave", loop: false, transitionMs: trans }]);
+      stageRef.current?.playTransition("leave");
     };
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
-  }, [runSequence]);
+  }, []);
 
   const visibleBubbles = bubbles.slice(-MAX_VISIBLE_BUBBLES);
-  const showPlaceholder = !srcA && !srcB;
-  const transSec = settings.standbyTransitionDuration;
+  const hasStandby = !!settings.videoData["standby"];
 
   return (
     <div className={`stage-shell ${fadeOut ? "fading" : ""}`}>
-      {/* Full-screen avatar background */}
-      <div className="stage-bg">
-        {showPlaceholder && (
+      <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
+
+      {!hasStandby && (
+        <div className="stage-placeholder-wrap">
           <div className="stage-placeholder">
             <div className="placeholder-pulse" />
             <div className="placeholder-label">{STATUS_LABELS[agentState] || agentState}</div>
             <small>Carregue os vídeos no Avatar Creator</small>
           </div>
-        )}
-        {srcA && (
-          <video
-            ref={videoARef}
-            className={`stage-video ${activeLayer === "A" ? "active" : ""}`}
-            style={{ transitionDuration: `${transSec}s` }}
-            autoPlay muted playsInline
-            src={srcA}
-            key={`A-${labelA}`}
-          />
-        )}
-        {srcB && (
-          <video
-            ref={videoBRef}
-            className={`stage-video ${activeLayer === "B" ? "active" : ""}`}
-            style={{ transitionDuration: `${transSec}s` }}
-            autoPlay muted playsInline
-            src={srcB}
-            key={`B-${labelB}`}
-          />
-        )}
-        <div className="stage-vignette" />
-      </div>
+        </div>
+      )}
 
-      {/* Floating UI */}
       <button
         className="settings-trigger floating"
         onClick={() => setSettingsOpen(true)}
