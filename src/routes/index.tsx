@@ -174,7 +174,7 @@ function AgentPage() {
   const seqIdRef = useRef(0);
 
   const runSequence = useCallback(
-    async (steps: Array<{ key: VideoKey; loop?: boolean; maxMs?: number; afterMs?: number }>) => {
+    async (steps: Array<{ key: VideoKey; loop?: boolean; transitionMs?: number; maxMs?: number; afterMs?: number }>) => {
       const id = ++seqIdRef.current;
       for (const step of steps) {
         if (id !== seqIdRef.current) return; // preempted
