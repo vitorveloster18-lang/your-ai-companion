@@ -52,7 +52,7 @@ body {
   border-radius: 0 !important;
   clip-path: none;
   opacity: 0;
-  transition: opacity 0.5s ease-in-out;
+  transition: opacity 0.3s ease-in-out;
   pointer-events: none;
   z-index: 0;
   background: #f0f0f5;
