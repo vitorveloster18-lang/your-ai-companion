@@ -83,93 +83,103 @@ function AgentPage() {
     return () => timers.forEach(clearTimeout);
   }, [bubbles]);
 
-  /** Plays a video on the inactive layer and crossfades to it. Resolves when:
-   *   - looping: as soon as fade completes
-   *   - non-looping: when the video naturally ends (or after maxDuration safety) */
+  const activeLayerRef = useRef<"A" | "B">("A");
+  const CROSSFADE_MS = 300;
+
+  /** Play one clip on the inactive layer, crossfade in, and:
+   *  - For non-loop clips: resolve when the video ENDS naturally (transition fully played).
+   *  - For loop clips: resolve once the crossfade-in completes.
+   *  Always pauses the previously active layer after the crossfade. */
   const playVideo = useCallback(
-    (key: VideoKey, opts: { loop?: boolean; transitionMs?: number; maxMs?: number } = {}) => {
+    (key: VideoKey, opts: { loop?: boolean; maxMs?: number } = {}) => {
       return new Promise<void>((resolve) => {
         const s = settingsRef.current;
         const src = getVideoSrc(key, s);
-        if (!src) {
-          // Skip transitions/emotions silently if missing.
-          // For base loops, just update label so placeholder shows.
-          setAgentState(key);
-          if (opts.loop) {
-            // keep showing placeholder; resolve immediately
-            resolve();
-          } else {
-            // skip non-looping silently
-            resolve();
-          }
-          return;
-        }
         const meta = VIDEO_LIBRARY.find((v) => v.key === key);
         const looping = opts.loop ?? (meta?.defaultLoop ?? false);
-        const transitionMs = opts.transitionMs ?? 500;
 
         setAgentState(key);
 
-        // Pick inactive layer
-        const useB = activeLayerRef.current === "A";
-        if (useB) {
-          setSrcB(src);
-          setLabelB(key);
-        } else {
-          setSrcA(src);
-          setLabelA(key);
+        if (!src) {
+          // No asset — skip silently (transitions) or hold placeholder (loops)
+          resolve();
+          return;
         }
 
-        // Wait one frame for the video element to update src, then play and switch
+        const fromLayer = activeLayerRef.current;
+        const toLayer = fromLayer === "A" ? "B" : "A";
+        const fromEl = fromLayer === "A" ? videoARef.current : videoBRef.current;
+        const toElGetter = () => (toLayer === "A" ? videoARef.current : videoBRef.current);
+
+        if (toLayer === "B") { setSrcB(src); setLabelB(key); }
+        else                  { setSrcA(src); setLabelA(key); }
+
+        let resolved = false;
+        const finish = () => {
+          if (resolved) return;
+          resolved = true;
+          // Pause previous layer to ensure only one video plays at a time.
+          if (fromEl) { try { fromEl.pause(); } catch {} }
+          resolve();
+        };
+
+        // Wait until the new <video> element exists with the new src, then start.
         requestAnimationFrame(() => {
-          const target = useB ? videoBRef.current : videoARef.current;
-          if (target) {
-            target.loop = looping;
-            target.currentTime = 0;
+          const target = toElGetter();
+          if (!target) { finish(); return; }
+          target.loop = looping;
+          target.currentTime = 0;
+          target.muted = true;
+
+          const start = () => {
             target.play().catch(() => {});
+            // Crossfade — flip active layer
+            activeLayerRef.current = toLayer;
+            setActiveLayer(toLayer);
 
-            const onEnded = () => {
-              target.removeEventListener("ended", onEnded);
-              resolve();
-            };
-            if (!looping) target.addEventListener("ended", onEnded);
-
-            // safety timeout for non-looping if 'ended' never fires
-            if (!looping) {
+            if (looping) {
+              // Resolve once fade-in completes; loop continues until next call.
+              setTimeout(finish, CROSSFADE_MS);
+            } else {
+              const onEnded = () => {
+                target.removeEventListener("ended", onEnded);
+                finish();
+              };
+              target.addEventListener("ended", onEnded);
+              // Safety: if 'ended' never fires
               setTimeout(() => {
                 target.removeEventListener("ended", onEnded);
-                resolve();
-              }, opts.maxMs ?? 12000);
-            } else {
-              // resolve after fade for loops
-              setTimeout(resolve, transitionMs);
+                finish();
+              }, opts.maxMs ?? 15000);
             }
-          } else {
-            resolve();
+          };
+
+          if (target.readyState >= 2) start();
+          else {
+            const onReady = () => {
+              target.removeEventListener("loadeddata", onReady);
+              start();
+            };
+            target.addEventListener("loadeddata", onReady);
+            // Safety in case loadeddata never fires
+            setTimeout(start, 400);
           }
-          activeLayerRef.current = useB ? "B" : "A";
-          setActiveLayer(useB ? "B" : "A");
         });
       });
     },
     []
   );
 
-  const activeLayerRef = useRef<"A" | "B">("A");
-
-  // Sequence runner — guards against overlapping flows
+  // Sequence runner — strictly sequential, cancellable
   const seqIdRef = useRef(0);
 
   const runSequence = useCallback(
-    async (steps: Array<{ key: VideoKey; loop?: boolean; transitionMs?: number; maxMs?: number; afterMs?: number }>) => {
+    async (steps: Array<{ key: VideoKey; loop?: boolean; maxMs?: number; afterMs?: number }>) => {
       const id = ++seqIdRef.current;
       for (const step of steps) {
-        if (id !== seqIdRef.current) return; // cancelled
-        await playVideo(step.key, {
-          loop: step.loop,
-          transitionMs: step.transitionMs,
-          maxMs: step.maxMs,
-        });
+        if (id !== seqIdRef.current) return; // preempted
+        await playVideo(step.key, { loop: step.loop, maxMs: step.maxMs });
+        if (id !== seqIdRef.current) return;
         if (step.afterMs) {
           await new Promise((r) => setTimeout(r, step.afterMs));
         }
