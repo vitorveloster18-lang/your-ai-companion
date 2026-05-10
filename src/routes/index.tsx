@@ -258,7 +258,7 @@ function AgentPage() {
     <div className={`stage-shell ${fadeOut ? "fading" : ""}`}>
       <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
 
-      {!hasStandby && (
+      {mounted && !hasStandby && (
         <div className="stage-placeholder-wrap">
           <div className="stage-placeholder">
             <div className="placeholder-pulse" />
