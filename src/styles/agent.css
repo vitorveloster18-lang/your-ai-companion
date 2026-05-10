@@ -49,7 +49,7 @@ body {
   border-radius: 0 !important;
   background: transparent;
 }
-#layer-standby { opacity: 1 !important; z-index: 1; }
+#layer-standby, #layer-standby-b { z-index: 1; transition: opacity 0.6s ease; }
 #layer-state { z-index: 2; }
 #layer-transition { z-index: 3; }
 #layer-emotion { z-index: 4; }

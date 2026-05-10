@@ -60,6 +60,8 @@ function AgentPage() {
   const recognitionRef = useRef<any>(null);
   const stageRef = useRef<AvatarStageHandle>(null);
   const settingsRef = useRef(settings);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
 
   // Bubble cleanup
@@ -256,7 +258,7 @@ function AgentPage() {
     <div className={`stage-shell ${fadeOut ? "fading" : ""}`}>
       <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
 
-      {!hasStandby && (
+      {mounted && !hasStandby && (
         <div className="stage-placeholder-wrap">
           <div className="stage-placeholder">
             <div className="placeholder-pulse" />

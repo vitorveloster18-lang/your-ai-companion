@@ -13,25 +13,52 @@ type Props = { settings: AppSettings; onStateChange?: (key: VideoKey) => void };
 
 export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
   function AvatarStage({ settings, onStateChange }, ref) {
-    const standbyRef = useRef<HTMLVideoElement>(null);
+    // Two standby buffers for seamless crossfade looping (no flash at the end)
+    const standbyARef = useRef<HTMLVideoElement>(null);
+    const standbyBRef = useRef<HTMLVideoElement>(null);
+    const activeStandbyRef = useRef<"A" | "B">("A");
     const stateRef = useRef<HTMLVideoElement>(null);
     const transitionRef = useRef<HTMLVideoElement>(null);
     const emotionRef = useRef<HTMLVideoElement>(null);
     const settingsRef = useRef(settings);
     useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-    // Keep standby layer running with the latest source
+    // Keep both standby buffers loaded with the latest source
     useEffect(() => {
-      const el = standbyRef.current;
-      if (!el) return;
       const src = getVideoSrc("standby", settings);
-      if (src && el.src !== src) {
-        el.src = src;
-        el.loop = true;
+      if (!src) return;
+      [standbyARef.current, standbyBRef.current].forEach((el) => {
+        if (!el) return;
+        if (el.src !== src) el.src = src;
         el.muted = true;
-        el.play().catch(() => {});
-      }
+        el.loop = false; // we handle the loop manually with crossfade
+      });
+      // start A
+      const a = standbyARef.current;
+      if (a) { a.currentTime = 0; a.play().catch(() => {}); }
+      activeStandbyRef.current = "A";
+      if (standbyARef.current) standbyARef.current.style.opacity = "1";
+      if (standbyBRef.current) standbyBRef.current.style.opacity = "0";
     }, [settings]);
+
+    // Seamless crossfade: when the active buffer is ~0.5s from end, start the other from 0 and fade.
+    const handleStandbyTimeUpdate = (which: "A" | "B") => {
+      if (activeStandbyRef.current !== which) return;
+      const cur = which === "A" ? standbyARef.current : standbyBRef.current;
+      const other = which === "A" ? standbyBRef.current : standbyARef.current;
+      if (!cur || !other || !cur.duration || isNaN(cur.duration)) return;
+      const remaining = cur.duration - cur.currentTime;
+      if (remaining < 0.5 && other.paused) {
+        other.currentTime = 0;
+        other.play().catch(() => {});
+        // Crossfade
+        other.style.opacity = "1";
+        cur.style.opacity = "0";
+        activeStandbyRef.current = which === "A" ? "B" : "A";
+        // Pause the now-hidden buffer after fade completes
+        setTimeout(() => { try { cur.pause(); } catch {} }, 600);
+      }
+    };
 
     useImperativeHandle(ref, () => ({
       showState(key, loop = true) {
@@ -89,19 +116,28 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         setTimeout(() => { if (el.onended) done(); }, 15000);
       },
       setStandby(_key) {
-        const el = standbyRef.current;
-        if (!el) return;
+        const a = standbyARef.current;
         const src = getVideoSrc("standby", settingsRef.current);
-        if (!src) return;
-        if (el.src !== src) el.src = src;
-        el.loop = true;
-        el.play().catch(() => {});
+        if (!a || !src) return;
+        if (a.src !== src) a.src = src;
+        a.play().catch(() => {});
       },
     }));
 
     return (
       <div id="stage">
-        <video id="layer-standby" ref={standbyRef} autoPlay loop muted playsInline />
+        <video
+          id="layer-standby"
+          ref={standbyARef}
+          autoPlay muted playsInline
+          onTimeUpdate={() => handleStandbyTimeUpdate("A")}
+        />
+        <video
+          id="layer-standby-b"
+          ref={standbyBRef}
+          muted playsInline
+          onTimeUpdate={() => handleStandbyTimeUpdate("B")}
+        />
         <video id="layer-state" ref={stateRef} muted playsInline />
         <video id="layer-transition" ref={transitionRef} muted playsInline />
         <video id="layer-emotion" ref={emotionRef} muted playsInline />
