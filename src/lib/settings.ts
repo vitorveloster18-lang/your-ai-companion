@@ -253,6 +253,9 @@ export function loadSettings(): AppSettings {
       ...parsed,
       videoLoop: { ...DEFAULT_LOOP, ...(parsed.videoLoop || {}) },
       videoData: { ...(parsed.videoData || {}) },
+      videoClips: { ...(parsed.videoClips || {}) },
+      variantMode: { ...(parsed.variantMode || {}) },
+      variantStart: { ...(parsed.variantStart || {}) },
       statePrompts: { ...DEFAULT_STATE_PROMPTS, ...(parsed.statePrompts || {}) },
       stateDurations: { ...DEFAULT_STATE_DURATIONS, ...(parsed.stateDurations || {}) },
     };
