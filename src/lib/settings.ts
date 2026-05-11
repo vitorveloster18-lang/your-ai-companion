@@ -339,7 +339,7 @@ export async function loadAvatarVideos(
 
 /** Compatibility: returns user data URL or default file path (may 404 if absent). */
 export function resolveVideoSrc(key: VideoKey, settings: AppSettings): string {
-  return settings.videoData[key] || DEFAULT_VIDEOS[key];
+  return getVideoSrc(key, settings) || DEFAULT_VIDEOS[key];
 }
 
 /** Detects an emotion video key from text using triggers. Returns null if none. */
