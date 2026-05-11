@@ -279,6 +279,19 @@ export function getVideoVariants(key: VideoKey, settings: AppSettings): string[]
   return Array.isArray(v) ? v.filter(Boolean) : [v];
 }
 
+export type VariantDetail = { url: string; in?: number; out?: number };
+
+/** Returns all variants with their per-variant in/out clip points. */
+export function getVideoVariantsDetailed(key: VideoKey, settings: AppSettings): VariantDetail[] {
+  const urls = getVideoVariants(key, settings);
+  const clips = settings.videoClips?.[key] || [];
+  return urls.map((url, i) => ({
+    url,
+    in: clips[i]?.in,
+    out: clips[i]?.out,
+  }));
+}
+
 /** Returns user-uploaded data URL (first variant), or null if unavailable. */
 export function getVideoSrc(key: VideoKey, settings: AppSettings): string | null {
   const list = getVideoVariants(key, settings);
