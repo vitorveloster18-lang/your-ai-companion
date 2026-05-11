@@ -40,6 +40,41 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
     return Array.isArray(v) ? v : [v];
   };
 
+  const getClip = (key: VideoKey, idx: number): { in?: number; out?: number } => {
+    return draft.videoClips?.[key]?.[idx] || {};
+  };
+
+  const setClip = (key: VideoKey, idx: number, patch: { in?: number; out?: number }) => {
+    setDraft((d) => {
+      const arr = [...(d.videoClips?.[key] || [])];
+      while (arr.length <= idx) arr.push({});
+      arr[idx] = { ...arr[idx], ...patch };
+      const nextClips = { ...d.videoClips, [key]: arr };
+      const next = { ...d, videoClips: nextClips };
+      saveSettings(next);
+      onChange(next);
+      return next;
+    });
+  };
+
+  const setVariantMode = (key: VideoKey, mode: "round-robin" | "random") => {
+    setDraft((d) => {
+      const next = { ...d, variantMode: { ...d.variantMode, [key]: mode } };
+      saveSettings(next);
+      onChange(next);
+      return next;
+    });
+  };
+
+  const setVariantStart = (key: VideoKey, start: number) => {
+    setDraft((d) => {
+      const next = { ...d, variantStart: { ...d.variantStart, [key]: start } };
+      saveSettings(next);
+      onChange(next);
+      return next;
+    });
+  };
+
   const upload = async (key: VideoKey, file: File, variantIndex?: number) => {
     if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
       toast.error("Apenas arquivos .mp4");
