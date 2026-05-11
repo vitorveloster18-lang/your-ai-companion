@@ -34,7 +34,13 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
   const ready = VIDEO_LIBRARY.filter((v) => !!draft.videoData[v.key]).length;
   const total = VIDEO_LIBRARY.length;
 
-  const upload = async (key: VideoKey, file: File) => {
+  const getVariants = (key: VideoKey): string[] => {
+    const v = draft.videoData[key];
+    if (!v) return [];
+    return Array.isArray(v) ? v : [v];
+  };
+
+  const upload = async (key: VideoKey, file: File, variantIndex?: number) => {
     if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
       toast.error("Apenas arquivos .mp4");
       return;
@@ -44,19 +50,46 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
       return;
     }
     try {
-      toast.loading(`Enviando ${key}...`, { id: `up-${key}` });
-      const url = await uploadAvatarVideo(key, file, draft.sessionId);
+      const current = getVariants(key);
+      // variantIndex 1-based; if undefined => replace primary (1)
+      const idx = variantIndex ?? 1;
+      toast.loading(`Enviando ${key}${idx > 1 ? `.${idx}` : ""}...`, { id: `up-${key}-${idx}` });
+      const url = await uploadAvatarVideo(key, file, draft.sessionId, idx);
       setDraft((d) => {
-        const next = { ...d, videoData: { ...d.videoData, [key]: url } };
+        const list = [...current];
+        list[idx - 1] = url;
+        const next = { ...d, videoData: { ...d.videoData, [key]: list } };
         saveSettings(next);
         onChange(next);
         return next;
       });
-      toast.success(`Vídeo ${key} salvo na nuvem`, { id: `up-${key}` });
+      toast.success(`Vídeo ${key}${idx > 1 ? `.${idx}` : ""} salvo`, { id: `up-${key}-${idx}` });
     } catch (e: any) {
       console.error(e);
-      toast.error(`Falha ao enviar: ${e?.message || "erro"}`, { id: `up-${key}` });
+      toast.error(`Falha ao enviar: ${e?.message || "erro"}`, { id: `up-${key}-${(variantIndex ?? 1)}` });
     }
+  };
+
+  const addVariant = (key: VideoKey, file: File) => {
+    const next = getVariants(key).length + 1;
+    return upload(key, file, next);
+  };
+
+  const removeVariant = async (key: VideoKey, variantIndex: number) => {
+    try {
+      await deleteAvatarVideo(key, draft.sessionId, variantIndex);
+    } catch (e) { console.warn(e); }
+    setDraft((d) => {
+      const list = getVariants(key).filter((_, i) => i !== variantIndex - 1);
+      const nextData = { ...d.videoData };
+      if (list.length === 0) delete nextData[key];
+      else nextData[key] = list.length === 1 ? list[0] : list;
+      const updated = { ...d, videoData: nextData };
+      saveSettings(updated);
+      onChange(updated);
+      return updated;
+    });
+    toast.success("Variante removida");
   };
 
   const remove = async (key: VideoKey) => {
@@ -110,16 +143,18 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
 
           <div className="video-cards">
             {items.map((v) => {
-              const data = draft.videoData[v.key];
+              const variants = getVariants(v.key);
+              const hasAny = variants.length > 0;
+              const primary = variants[0];
               return (
-                <div key={v.key} className={`video-card ${data ? "ready" : ""}`}>
+                <div key={v.key} className={`video-card ${hasAny ? "ready" : ""}`}>
                   <div className="video-card-head">
                     <span className="vc-emoji">{v.emoji}</span>
                     <div className="vc-meta">
                       <b>{v.label}</b>
-                      <small>{v.filename}</small>
+                      <small>{v.filename}{variants.length > 1 ? ` • ${variants.length} variantes` : ""}</small>
                     </div>
-                    {data && <span className="check ok" title="Pronto">✓</span>}
+                    {hasAny && <span className="check ok" title="Pronto">✓</span>}
                   </div>
                   <p className="vc-desc">{v.description}</p>
                   <p className="vc-when">📍 {v.when}</p>
@@ -128,11 +163,27 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
                       <b>Gatilhos:</b> {v.triggers.slice(0, 4).join(", ")}…
                     </p>
                   )}
-                  {data ? (
-                    <video className="vc-thumb" src={data} muted loop autoPlay playsInline />
+                  {primary ? (
+                    <video className="vc-thumb" src={primary} muted loop autoPlay playsInline />
                   ) : (
                     <div className="vc-thumb empty">sem vídeo</div>
                   )}
+
+                  {variants.length > 1 && (
+                    <div className="vc-variants" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                      {variants.map((url, i) => (
+                        <div key={i} style={{ position: "relative" }}>
+                          <video src={url} muted playsInline style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }} />
+                          <button
+                            onClick={() => removeVariant(v.key, i + 1)}
+                            title={`Remover variante ${i + 1}`}
+                            style={{ position: "absolute", top: -6, right: -6, background: "rgba(0,0,0,0.7)", color: "#fff", border: 0, borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer" }}
+                          >×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   <div className="vc-actions">
                     <input
                       type="file"
@@ -145,10 +196,30 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
                         e.target.value = "";
                       }}
                     />
+                    <input
+                      type="file"
+                      accept="video/mp4"
+                      ref={(el) => { fileRefs.current[`${v.key}__add`] = el; }}
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) addVariant(v.key, f);
+                        e.target.value = "";
+                      }}
+                    />
                     <button className="btn-ghost" onClick={() => fileRefs.current[v.key]?.click()}>
-                      {data ? "Trocar" : "Upload"}
+                      {hasAny ? "Trocar" : "Upload"}
                     </button>
-                    {data && (
+                    {hasAny && (
+                      <button
+                        className="btn-ghost"
+                        onClick={() => fileRefs.current[`${v.key}__add`]?.click()}
+                        title="Adicionar outra variante para evitar quebra de loop"
+                      >
+                        + Variante
+                      </button>
+                    )}
+                    {hasAny && (
                       <button className="btn-ghost danger" onClick={() => remove(v.key)}>
                         Remover
                       </button>

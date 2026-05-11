@@ -148,8 +148,8 @@ export type AppSettings = {
   functionName: string;
   sessionId: string;
 
-  // Videos
-  videoData: Partial<Record<VideoKey, string>>;
+  // Videos — value can be a single URL or an array of variant URLs (cycled to avoid loop seams)
+  videoData: Partial<Record<VideoKey, string | string[]>>;
   videoLoop: Record<VideoKey, boolean>;
 
   // Voice
@@ -250,9 +250,17 @@ export function saveSettings(s: AppSettings) {
   }
 }
 
-/** Returns user-uploaded data URL, or null if unavailable (so caller can fallback / skip). */
+/** Returns all uploaded variant URLs for a key (empty array if none). */
+export function getVideoVariants(key: VideoKey, settings: AppSettings): string[] {
+  const v = settings.videoData[key];
+  if (!v) return [];
+  return Array.isArray(v) ? v.filter(Boolean) : [v];
+}
+
+/** Returns user-uploaded data URL (first variant), or null if unavailable. */
 export function getVideoSrc(key: VideoKey, settings: AppSettings): string | null {
-  return settings.videoData[key] || null;
+  const list = getVideoVariants(key, settings);
+  return list[0] || null;
 }
 
 // ===== Storage helpers =====
@@ -262,52 +270,73 @@ const BUCKET = "avatar-videos";
 
 async function loadVideosForSession(
   sessionId: string
-): Promise<{ videos: Partial<Record<VideoKey, string>>; latest: number }> {
+): Promise<{ videos: Partial<Record<VideoKey, string[]>>; latest: number }> {
   const { data, error } = await supabase.storage.from(BUCKET).list(sessionId, {
-    limit: 100,
+    limit: 500,
     sortBy: { column: "name", order: "asc" },
   });
   if (error || !data) return { videos: {}, latest: 0 };
 
-  const videos: Partial<Record<VideoKey, string>> = {};
+  const grouped: Partial<Record<VideoKey, { idx: number; url: string }[]>> = {};
   let latest = 0;
+  // matches "key.mp4" or "key.<n>.mp4"
+  const re = /^(.+?)(?:\.(\d+))?\.mp4$/;
   for (const f of data) {
-    const key = f.name.replace(/\.mp4$/, "") as VideoKey;
-    if (VIDEO_KEYS.includes(key)) {
-      const stamp = Date.parse(f.updated_at || f.created_at || "") || 0;
-      latest = Math.max(latest, stamp);
-      const { data: pub } = supabase.storage
-        .from(BUCKET)
-        .getPublicUrl(`${sessionId}/${f.name}`);
-      videos[key] = `${pub.publicUrl}${stamp ? `?t=${stamp}` : ""}`;
-    }
+    const m = f.name.match(re);
+    if (!m) continue;
+    const key = m[1] as VideoKey;
+    if (!VIDEO_KEYS.includes(key)) continue;
+    const idx = m[2] ? parseInt(m[2], 10) : 1;
+    const stamp = Date.parse(f.updated_at || f.created_at || "") || 0;
+    latest = Math.max(latest, stamp);
+    const { data: pub } = supabase.storage
+      .from(BUCKET)
+      .getPublicUrl(`${sessionId}/${f.name}`);
+    const url = `${pub.publicUrl}${stamp ? `?t=${stamp}` : ""}`;
+    (grouped[key] ||= []).push({ idx, url });
+  }
+  const videos: Partial<Record<VideoKey, string[]>> = {};
+  for (const k of Object.keys(grouped) as VideoKey[]) {
+    videos[k] = grouped[k]!.sort((a, b) => a.idx - b.idx).map((v) => v.url);
   }
   return { videos, latest };
+}
+
+function variantFilename(key: VideoKey, variant: number): string {
+  return variant <= 1 ? `${key}.mp4` : `${key}.${variant}.mp4`;
 }
 
 export async function uploadAvatarVideo(
   key: VideoKey,
   file: File,
-  sessionId: string
+  sessionId: string,
+  variant: number = 1
 ): Promise<string> {
-  const path = `${sessionId}/${key}.mp4`;
+  const path = `${sessionId}/${variantFilename(key, variant)}`;
   const { error } = await supabase.storage
     .from(BUCKET)
     .upload(path, file, { upsert: true, contentType: "video/mp4" });
   if (error) throw error;
   const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  // bust cache
   return `${data.publicUrl}?t=${Date.now()}`;
 }
 
-export async function deleteAvatarVideo(key: VideoKey, sessionId: string) {
-  const path = `${sessionId}/${key}.mp4`;
-  await supabase.storage.from(BUCKET).remove([path]);
+export async function deleteAvatarVideo(key: VideoKey, sessionId: string, variant?: number) {
+  if (variant !== undefined) {
+    await supabase.storage.from(BUCKET).remove([`${sessionId}/${variantFilename(key, variant)}`]);
+    return;
+  }
+  // Remove all variants
+  const { data } = await supabase.storage.from(BUCKET).list(sessionId, { limit: 500 });
+  const targets = (data || [])
+    .filter((f) => f.name === `${key}.mp4` || f.name.startsWith(`${key}.`))
+    .map((f) => `${sessionId}/${f.name}`);
+  if (targets.length) await supabase.storage.from(BUCKET).remove(targets);
 }
 
 export async function loadAvatarVideos(
   sessionId: string
-): Promise<Partial<Record<VideoKey, string>>> {
+): Promise<Partial<Record<VideoKey, string[]>>> {
   const current = await loadVideosForSession(sessionId);
   if (Object.keys(current.videos).length > 0) return current.videos;
 
@@ -331,7 +360,7 @@ export async function loadAvatarVideos(
 
 /** Compatibility: returns user data URL or default file path (may 404 if absent). */
 export function resolveVideoSrc(key: VideoKey, settings: AppSettings): string {
-  return settings.videoData[key] || DEFAULT_VIDEOS[key];
+  return getVideoSrc(key, settings) || DEFAULT_VIDEOS[key];
 }
 
 /** Detects an emotion video key from text using triggers. Returns null if none. */
