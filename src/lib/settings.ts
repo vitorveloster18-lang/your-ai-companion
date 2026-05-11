@@ -336,7 +336,7 @@ export async function deleteAvatarVideo(key: VideoKey, sessionId: string, varian
 
 export async function loadAvatarVideos(
   sessionId: string
-): Promise<Partial<Record<VideoKey, string>>> {
+): Promise<Partial<Record<VideoKey, string[]>>> {
   const current = await loadVideosForSession(sessionId);
   if (Object.keys(current.videos).length > 0) return current.videos;
 
