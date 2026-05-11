@@ -148,8 +148,8 @@ export type AppSettings = {
   functionName: string;
   sessionId: string;
 
-  // Videos
-  videoData: Partial<Record<VideoKey, string>>;
+  // Videos — value can be a single URL or an array of variant URLs (cycled to avoid loop seams)
+  videoData: Partial<Record<VideoKey, string | string[]>>;
   videoLoop: Record<VideoKey, boolean>;
 
   // Voice
