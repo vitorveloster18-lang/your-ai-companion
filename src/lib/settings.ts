@@ -208,6 +208,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   videoData: {},
   videoLoop: { ...DEFAULT_LOOP },
+  videoClips: {},
+  variantMode: {},
+  variantStart: {},
 
   voiceEnabled: true,
   speechRate: 1.0,
@@ -226,6 +229,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   standbyDelay: 3,
   standbyTransitionDuration: 1,
   startInStandby: true,
+  crossfadeMs: 600,
+  crossfadeThresholdMs: 600,
+  standbyFreeze: false,
+  standbyFreezeAt: 0,
 
   referenceImage: "",
   apiProvider: "replicate",
