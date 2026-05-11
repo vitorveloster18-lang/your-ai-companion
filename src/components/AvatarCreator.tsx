@@ -40,6 +40,41 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
     return Array.isArray(v) ? v : [v];
   };
 
+  const getClip = (key: VideoKey, idx: number): { in?: number; out?: number } => {
+    return draft.videoClips?.[key]?.[idx] || {};
+  };
+
+  const setClip = (key: VideoKey, idx: number, patch: { in?: number; out?: number }) => {
+    setDraft((d) => {
+      const arr = [...(d.videoClips?.[key] || [])];
+      while (arr.length <= idx) arr.push({});
+      arr[idx] = { ...arr[idx], ...patch };
+      const nextClips = { ...d.videoClips, [key]: arr };
+      const next = { ...d, videoClips: nextClips };
+      saveSettings(next);
+      onChange(next);
+      return next;
+    });
+  };
+
+  const setVariantMode = (key: VideoKey, mode: "round-robin" | "random") => {
+    setDraft((d) => {
+      const next = { ...d, variantMode: { ...d.variantMode, [key]: mode } };
+      saveSettings(next);
+      onChange(next);
+      return next;
+    });
+  };
+
+  const setVariantStart = (key: VideoKey, start: number) => {
+    setDraft((d) => {
+      const next = { ...d, variantStart: { ...d.variantStart, [key]: start } };
+      saveSettings(next);
+      onChange(next);
+      return next;
+    });
+  };
+
   const upload = async (key: VideoKey, file: File, variantIndex?: number) => {
     if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
       toast.error("Apenas arquivos .mp4");
@@ -169,18 +204,74 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
                     <div className="vc-thumb empty">sem vídeo</div>
                   )}
 
+                  {hasAny && (
+                    <div className="vc-variants-grid" style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                      {variants.map((url, i) => {
+                        const clip = getClip(v.key, i);
+                        return (
+                          <div key={i} style={{ display: "flex", gap: 8, alignItems: "center", padding: 6, background: "rgba(0,0,0,0.04)", borderRadius: 8 }}>
+                            <div style={{ position: "relative", flex: "0 0 auto" }}>
+                              <video src={url} muted playsInline style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 6 }} />
+                              <span style={{ position: "absolute", bottom: 2, left: 2, background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: 10, padding: "1px 4px", borderRadius: 3 }}>#{i + 1}</span>
+                            </div>
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, flex: 1, fontSize: 12 }}>
+                              <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span style={{ opacity: 0.7 }}>In (s)</span>
+                                <input
+                                  type="number" min={0} step={0.05}
+                                  value={clip.in ?? ""}
+                                  placeholder="0"
+                                  onChange={(e) => setClip(v.key, i, { in: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                                  style={{ width: "100%" }}
+                                />
+                              </label>
+                              <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span style={{ opacity: 0.7 }}>Out (s)</span>
+                                <input
+                                  type="number" min={0} step={0.05}
+                                  value={clip.out ?? ""}
+                                  placeholder="fim"
+                                  onChange={(e) => setClip(v.key, i, { out: e.target.value === "" ? undefined : parseFloat(e.target.value) })}
+                                  style={{ width: "100%" }}
+                                />
+                              </label>
+                            </div>
+                            {variants.length > 1 && (
+                              <button
+                                onClick={() => removeVariant(v.key, i + 1)}
+                                title={`Remover variante ${i + 1}`}
+                                style={{ background: "rgba(0,0,0,0.7)", color: "#fff", border: 0, borderRadius: "50%", width: 22, height: 22, fontSize: 12, cursor: "pointer", flex: "0 0 auto" }}
+                              >×</button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {variants.length > 1 && (
-                    <div className="vc-variants" style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                      {variants.map((url, i) => (
-                        <div key={i} style={{ position: "relative" }}>
-                          <video src={url} muted playsInline style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 6 }} />
-                          <button
-                            onClick={() => removeVariant(v.key, i + 1)}
-                            title={`Remover variante ${i + 1}`}
-                            style={{ position: "absolute", top: -6, right: -6, background: "rgba(0,0,0,0.7)", color: "#fff", border: 0, borderRadius: "50%", width: 18, height: 18, fontSize: 11, cursor: "pointer" }}
-                          >×</button>
-                        </div>
-                      ))}
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, fontSize: 12, flexWrap: "wrap" }}>
+                      <label style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        Modo:
+                        <select
+                          value={draft.variantMode?.[v.key] ?? "round-robin"}
+                          onChange={(e) => setVariantMode(v.key, e.target.value as "round-robin" | "random")}
+                        >
+                          <option value="round-robin">Round-robin</option>
+                          <option value="random">Aleatório</option>
+                        </select>
+                      </label>
+                      <label style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        Iniciar em:
+                        <select
+                          value={draft.variantStart?.[v.key] ?? 1}
+                          onChange={(e) => setVariantStart(v.key, parseInt(e.target.value, 10))}
+                        >
+                          {variants.map((_, i) => (
+                            <option key={i} value={i + 1}>#{i + 1}</option>
+                          ))}
+                        </select>
+                      </label>
                     </div>
                   )}
 

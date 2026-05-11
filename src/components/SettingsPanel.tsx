@@ -142,6 +142,39 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
           </section>
 
           <section className="settings-section">
+            <h3>Crossfade & Loop</h3>
+            <label>Duração do crossfade ({draft.crossfadeMs} ms)
+              <input type="range" min={100} max={2000} step={50}
+                value={draft.crossfadeMs}
+                onChange={(e) => update("crossfadeMs", parseInt(e.target.value, 10))} />
+            </label>
+            <label>Limiar de antecipação ({draft.crossfadeThresholdMs} ms antes do fim)
+              <input type="range" min={100} max={2000} step={50}
+                value={draft.crossfadeThresholdMs}
+                onChange={(e) => update("crossfadeThresholdMs", parseInt(e.target.value, 10))} />
+            </label>
+          </section>
+
+          <section className="settings-section">
+            <h3>Congelar avatar (standby)</h3>
+            <label className="toggle-row">
+              <span>Pausar avatar em um frame fixo</span>
+              <input type="checkbox" checked={draft.standbyFreeze}
+                onChange={(e) => update("standbyFreeze", e.target.checked)} />
+            </label>
+            <label>Tempo do frame ({draft.standbyFreezeAt.toFixed(2)}s)
+              <input type="number" min={0} step={0.05}
+                value={draft.standbyFreezeAt}
+                disabled={!draft.standbyFreeze}
+                onChange={(e) => update("standbyFreezeAt", parseFloat(e.target.value) || 0)} />
+            </label>
+            <small style={{ opacity: 0.7 }}>
+              Quando ativo, o avatar fica parado no frame escolhido do <b>standby</b>.
+              As demais animações (listening, speaking, emoções…) continuam normais.
+            </small>
+          </section>
+
+          <section className="settings-section">
             <h3>Voz</h3>
             <label className="toggle-row">
               <span>Saída de voz</span>

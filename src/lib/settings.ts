@@ -151,6 +151,12 @@ export type AppSettings = {
   // Videos — value can be a single URL or an array of variant URLs (cycled to avoid loop seams)
   videoData: Partial<Record<VideoKey, string | string[]>>;
   videoLoop: Record<VideoKey, boolean>;
+  // Per-variant in/out clip points (seconds). videoClips[key][i] applies to variant i.
+  videoClips: Partial<Record<VideoKey, Array<{ in?: number; out?: number }>>>;
+  // How to pick the next variant for a state: "round-robin" (default) or "random"
+  variantMode: Partial<Record<VideoKey, "round-robin" | "random">>;
+  // 1-based start variant index for each state (defaults to 1)
+  variantStart: Partial<Record<VideoKey, number>>;
 
   // Voice
   voiceEnabled: boolean;
@@ -168,10 +174,16 @@ export type AppSettings = {
   showBubbles: boolean;
   showStatus: boolean;
 
-  // Stage behavior (NEW)
-  standbyDelay: number;          // seconds to wait before returning to standby
-  standbyTransitionDuration: number; // seconds for the standby crossfade
+  // Stage behavior
+  standbyDelay: number;
+  standbyTransitionDuration: number;
   startInStandby: boolean;
+  // Crossfade tuning between loop cycles / states
+  crossfadeMs: number;          // duration of opacity transition between buffers
+  crossfadeThresholdMs: number; // start crossfade when this many ms remain in active buffer
+  // Freeze the avatar on a single standby frame (other animations still run on top)
+  standbyFreeze: boolean;
+  standbyFreezeAt: number;      // seconds into the standby video to pause at
 
   // Avatar Creator
   referenceImage: string;
@@ -196,6 +208,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
 
   videoData: {},
   videoLoop: { ...DEFAULT_LOOP },
+  videoClips: {},
+  variantMode: {},
+  variantStart: {},
 
   voiceEnabled: true,
   speechRate: 1.0,
@@ -214,6 +229,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   standbyDelay: 3,
   standbyTransitionDuration: 1,
   startInStandby: true,
+  crossfadeMs: 600,
+  crossfadeThresholdMs: 600,
+  standbyFreeze: false,
+  standbyFreezeAt: 0,
 
   referenceImage: "",
   apiProvider: "replicate",
@@ -234,6 +253,9 @@ export function loadSettings(): AppSettings {
       ...parsed,
       videoLoop: { ...DEFAULT_LOOP, ...(parsed.videoLoop || {}) },
       videoData: { ...(parsed.videoData || {}) },
+      videoClips: { ...(parsed.videoClips || {}) },
+      variantMode: { ...(parsed.variantMode || {}) },
+      variantStart: { ...(parsed.variantStart || {}) },
       statePrompts: { ...DEFAULT_STATE_PROMPTS, ...(parsed.statePrompts || {}) },
       stateDurations: { ...DEFAULT_STATE_DURATIONS, ...(parsed.stateDurations || {}) },
     };
@@ -255,6 +277,19 @@ export function getVideoVariants(key: VideoKey, settings: AppSettings): string[]
   const v = settings.videoData[key];
   if (!v) return [];
   return Array.isArray(v) ? v.filter(Boolean) : [v];
+}
+
+export type VariantDetail = { url: string; in?: number; out?: number };
+
+/** Returns all variants with their per-variant in/out clip points. */
+export function getVideoVariantsDetailed(key: VideoKey, settings: AppSettings): VariantDetail[] {
+  const urls = getVideoVariants(key, settings);
+  const clips = settings.videoClips?.[key] || [];
+  return urls.map((url, i) => ({
+    url,
+    in: clips[i]?.in,
+    out: clips[i]?.out,
+  }));
 }
 
 /** Returns user-uploaded data URL (first variant), or null if unavailable. */

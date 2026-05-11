@@ -1,5 +1,11 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { type AppSettings, type VideoKey, getVideoSrc, getVideoVariants } from "@/lib/settings";
+import {
+  type AppSettings,
+  type VideoKey,
+  type VariantDetail,
+  getVideoSrc,
+  getVideoVariantsDetailed,
+} from "@/lib/settings";
 
 export type AvatarStageHandle = {
   showState: (key: VideoKey, loop?: boolean) => void;
@@ -11,131 +17,203 @@ export type AvatarStageHandle = {
 
 type Props = { settings: AppSettings; onStateChange?: (key: VideoKey) => void };
 
-function pickRandom<T>(arr: T[]): T | null {
-  if (!arr.length) return null;
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
 export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
   function AvatarStage({ settings, onStateChange }, ref) {
     // Two standby buffers for seamless crossfade looping (no flash at the end)
     const standbyARef = useRef<HTMLVideoElement>(null);
     const standbyBRef = useRef<HTMLVideoElement>(null);
     const activeStandbyRef = useRef<"A" | "B">("A");
-    // Cycle through standby variants instead of repeating the same clip
-    const standbyVariantIndexRef = useRef(0);
+    const standbyVariantIdxRef = useRef(0);
+
+    // Round-robin counters per state for non-standby variants
+    const variantCounterRef = useRef<Partial<Record<VideoKey, number>>>({});
+
     const stateRef = useRef<HTMLVideoElement>(null);
     const transitionRef = useRef<HTMLVideoElement>(null);
     const emotionRef = useRef<HTMLVideoElement>(null);
+
     const settingsRef = useRef(settings);
     useEffect(() => { settingsRef.current = settings; }, [settings]);
 
-    // Pick the next standby variant URL, advancing the index (round-robin).
-    const nextStandbyVariant = (): string | null => {
-      const variants = getVideoVariants("standby", settingsRef.current);
+    // Apply crossfade duration CSS variable
+    useEffect(() => {
+      const ms = Math.max(50, settings.crossfadeMs ?? 600);
+      [standbyARef, standbyBRef, stateRef, transitionRef, emotionRef].forEach((r) => {
+        if (r.current) r.current.style.transitionDuration = `${ms}ms`;
+      });
+    }, [settings.crossfadeMs]);
+
+    const pickVariant = (key: VideoKey, isStandby = false): VariantDetail | null => {
+      const variants = getVideoVariantsDetailed(key, settingsRef.current);
       if (!variants.length) return null;
-      const i = standbyVariantIndexRef.current % variants.length;
-      standbyVariantIndexRef.current = (i + 1) % variants.length;
+      const mode = settingsRef.current.variantMode?.[key] ?? "round-robin";
+      if (mode === "random") {
+        return variants[Math.floor(Math.random() * variants.length)];
+      }
+      // round-robin
+      if (isStandby) {
+        const i = standbyVariantIdxRef.current % variants.length;
+        standbyVariantIdxRef.current = (i + 1) % variants.length;
+        return variants[i];
+      }
+      const cur = variantCounterRef.current[key] ?? 0;
+      const i = cur % variants.length;
+      variantCounterRef.current[key] = (i + 1) % variants.length;
       return variants[i];
     };
 
-    // Initialize both standby buffers with the first variant
+    // Apply in/out trimming when starting a video on an element
+    const startPlayback = (el: HTMLVideoElement, v: VariantDetail, opts: { loop: boolean }) => {
+      el.src = v.url;
+      el.loop = opts.loop && !v.out; // if out trim is set we handle ending manually
+      el.muted = true;
+      const apply = () => {
+        try { if (typeof v.in === "number" && v.in > 0) el.currentTime = v.in; } catch {}
+        el.play().catch(() => {});
+      };
+      if (el.readyState >= 1) apply();
+      else el.addEventListener("loadedmetadata", apply, { once: true });
+    };
+
+    // ===== Standby management =====
     useEffect(() => {
-      const variants = getVideoVariants("standby", settings);
-      if (!variants.length) return;
-      standbyVariantIndexRef.current = 0;
-      const firstSrc = nextStandbyVariant(); // advances to 1
+      const s = settingsRef.current;
+      const variants = getVideoVariantsDetailed("standby", s);
       const a = standbyARef.current;
       const b = standbyBRef.current;
-      if (a && firstSrc) {
-        if (a.src !== firstSrc) a.src = firstSrc;
-        a.muted = true; a.loop = false;
-        a.currentTime = 0;
-        a.play().catch(() => {});
-        a.style.opacity = "1";
-      }
-      if (b) {
-        b.muted = true; b.loop = false;
-        b.style.opacity = "0";
-      }
-      activeStandbyRef.current = "A";
-    }, [settings]);
+      if (!a || !b) return;
 
-    // Seamless crossfade: when active buffer is ~0.5s from end, start the OTHER
-    // buffer with the NEXT variant from 0 and crossfade. With multiple variants
-    // this hides any visible loop seam.
+      // No standby video — nothing to do
+      if (!variants.length) return;
+
+      // Initialize round-robin index from variantStart (1-based)
+      const start = Math.max(1, s.variantStart?.["standby"] ?? 1);
+      standbyVariantIdxRef.current = (start - 1) % variants.length;
+
+      // FREEZE MODE — single static frame, no looping
+      if (s.standbyFreeze) {
+        const v = variants[standbyVariantIdxRef.current % variants.length];
+        a.src = v.url;
+        a.loop = false;
+        a.muted = true;
+        const freezeAt = Math.max(0, s.standbyFreezeAt ?? 0);
+        const apply = () => {
+          try { a.currentTime = freezeAt; } catch {}
+          try { a.pause(); } catch {}
+        };
+        if (a.readyState >= 1) apply();
+        else a.addEventListener("loadedmetadata", apply, { once: true });
+        a.style.opacity = "1";
+        b.style.opacity = "0";
+        try { b.pause(); } catch {}
+        activeStandbyRef.current = "A";
+        return;
+      }
+
+      // LOOP MODE — start the first variant, advance the rr index
+      const first = variants[standbyVariantIdxRef.current % variants.length];
+      standbyVariantIdxRef.current = (standbyVariantIdxRef.current + 1) % variants.length;
+      startPlayback(a, first, { loop: false });
+      a.style.opacity = "1";
+      b.style.opacity = "0";
+      try { b.pause(); } catch {}
+      activeStandbyRef.current = "A";
+    }, [
+      settings.videoData,
+      settings.videoClips,
+      settings.standbyFreeze,
+      settings.standbyFreezeAt,
+      settings.variantStart,
+    ]);
+
+    // Crossfade: when active buffer approaches its effective end, prep & fade in the other
     const handleStandbyTimeUpdate = (which: "A" | "B") => {
+      const s = settingsRef.current;
+      if (s.standbyFreeze) return;
       if (activeStandbyRef.current !== which) return;
       const cur = which === "A" ? standbyARef.current : standbyBRef.current;
       const other = which === "A" ? standbyBRef.current : standbyARef.current;
       if (!cur || !other || !cur.duration || isNaN(cur.duration)) return;
-      const remaining = cur.duration - cur.currentTime;
-      if (remaining < 0.6 && other.paused) {
-        const nextSrc = nextStandbyVariant();
-        if (!nextSrc) return;
-        if (other.src !== nextSrc) other.src = nextSrc;
-        other.currentTime = 0;
-        other.play().catch(() => {});
+
+      // Determine effective end using "out" clip if set (we stored it on dataset)
+      const outAttr = cur.dataset.outSec ? parseFloat(cur.dataset.outSec) : NaN;
+      const effectiveEnd = isFinite(outAttr) && outAttr > 0 ? outAttr : cur.duration;
+      const remaining = effectiveEnd - cur.currentTime;
+      const thresholdSec = Math.max(0.1, (s.crossfadeThresholdMs ?? 600) / 1000);
+
+      if (remaining < thresholdSec && other.paused) {
+        const next = pickVariant("standby", true);
+        if (!next) return;
+        startPlayback(other, next, { loop: false });
+        other.dataset.outSec = next.out != null ? String(next.out) : "";
         other.style.opacity = "1";
         cur.style.opacity = "0";
         activeStandbyRef.current = which === "A" ? "B" : "A";
-        setTimeout(() => { try { cur.pause(); } catch {} }, 700);
+        const fadeMs = Math.max(50, s.crossfadeMs ?? 600) + 100;
+        setTimeout(() => { try { cur.pause(); } catch {} }, fadeMs);
       }
+    };
+
+    // For state/transition/emotion: monitor time vs "out" trim and end the clip early
+    const watchTrim = (el: HTMLVideoElement, v: VariantDetail, onEnd: () => void) => {
+      if (v.out == null || v.out <= 0) return;
+      const tick = () => {
+        if (el.currentTime >= (v.out as number)) {
+          el.removeEventListener("timeupdate", tick);
+          onEnd();
+        }
+      };
+      el.addEventListener("timeupdate", tick);
     };
 
     useImperativeHandle(ref, () => ({
       showState(key, loop = true) {
         const el = stateRef.current;
         if (!el) return;
-        const variants = getVideoVariants(key, settingsRef.current);
-        const src = pickRandom(variants);
-        if (!src) return;
-        el.src = src;
-        el.loop = loop;
-        el.muted = true;
-        el.play().catch(() => {});
+        const v = pickVariant(key);
+        if (!v) return;
+        startPlayback(el, v, { loop });
         el.style.opacity = "1";
         onStateChange?.(key);
       },
       hideState(cb) {
         const el = stateRef.current;
+        const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
         if (!el) { cb?.(); return; }
         el.style.opacity = "0";
-        setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, 500);
+        setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, ms);
       },
       playTransition(key, cb) {
         const el = transitionRef.current;
-        const src = pickRandom(getVideoVariants(key, settingsRef.current));
-        if (!el || !src) { cb?.(); return; }
-        el.src = src;
-        el.loop = false;
-        el.muted = true;
-        el.play().catch(() => {});
+        const v = pickVariant(key);
+        if (!el || !v) { cb?.(); return; }
+        startPlayback(el, v, { loop: false });
         el.style.opacity = "1";
         onStateChange?.(key);
+        const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
         const done = () => {
           el.onended = null;
           el.style.opacity = "0";
-          setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, 500);
+          setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, ms);
         };
         el.onended = done;
+        watchTrim(el, v, done);
         setTimeout(() => { if (el.onended) done(); }, 15000);
       },
       playEmotion(key, cb) {
         const el = emotionRef.current;
-        const src = pickRandom(getVideoVariants(key, settingsRef.current));
-        if (!el || !src) { cb?.(); return; }
-        el.src = src;
-        el.loop = false;
-        el.muted = true;
-        el.play().catch(() => {});
+        const v = pickVariant(key);
+        if (!el || !v) { cb?.(); return; }
+        startPlayback(el, v, { loop: false });
         el.style.opacity = "1";
+        const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
         const done = () => {
           el.onended = null;
           el.style.opacity = "0";
-          setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, 500);
+          setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, ms);
         };
         el.onended = done;
+        watchTrim(el, v, done);
         setTimeout(() => { if (el.onended) done(); }, 15000);
       },
       setStandby(_key) {
