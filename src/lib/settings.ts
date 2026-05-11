@@ -250,9 +250,17 @@ export function saveSettings(s: AppSettings) {
   }
 }
 
-/** Returns user-uploaded data URL, or null if unavailable (so caller can fallback / skip). */
+/** Returns all uploaded variant URLs for a key (empty array if none). */
+export function getVideoVariants(key: VideoKey, settings: AppSettings): string[] {
+  const v = settings.videoData[key];
+  if (!v) return [];
+  return Array.isArray(v) ? v.filter(Boolean) : [v];
+}
+
+/** Returns user-uploaded data URL (first variant), or null if unavailable. */
 export function getVideoSrc(key: VideoKey, settings: AppSettings): string | null {
-  return settings.videoData[key] || null;
+  const list = getVideoVariants(key, settings);
+  return list[0] || null;
 }
 
 // ===== Storage helpers =====
