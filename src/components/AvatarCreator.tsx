@@ -34,7 +34,13 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
   const ready = VIDEO_LIBRARY.filter((v) => !!draft.videoData[v.key]).length;
   const total = VIDEO_LIBRARY.length;
 
-  const upload = async (key: VideoKey, file: File) => {
+  const getVariants = (key: VideoKey): string[] => {
+    const v = draft.videoData[key];
+    if (!v) return [];
+    return Array.isArray(v) ? v : [v];
+  };
+
+  const upload = async (key: VideoKey, file: File, variantIndex?: number) => {
     if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
       toast.error("Apenas arquivos .mp4");
       return;
@@ -44,19 +50,46 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
       return;
     }
     try {
-      toast.loading(`Enviando ${key}...`, { id: `up-${key}` });
-      const url = await uploadAvatarVideo(key, file, draft.sessionId);
+      const current = getVariants(key);
+      // variantIndex 1-based; if undefined => replace primary (1)
+      const idx = variantIndex ?? 1;
+      toast.loading(`Enviando ${key}${idx > 1 ? `.${idx}` : ""}...`, { id: `up-${key}-${idx}` });
+      const url = await uploadAvatarVideo(key, file, draft.sessionId, idx);
       setDraft((d) => {
-        const next = { ...d, videoData: { ...d.videoData, [key]: url } };
+        const list = [...current];
+        list[idx - 1] = url;
+        const next = { ...d, videoData: { ...d.videoData, [key]: list } };
         saveSettings(next);
         onChange(next);
         return next;
       });
-      toast.success(`Vídeo ${key} salvo na nuvem`, { id: `up-${key}` });
+      toast.success(`Vídeo ${key}${idx > 1 ? `.${idx}` : ""} salvo`, { id: `up-${key}-${idx}` });
     } catch (e: any) {
       console.error(e);
-      toast.error(`Falha ao enviar: ${e?.message || "erro"}`, { id: `up-${key}` });
+      toast.error(`Falha ao enviar: ${e?.message || "erro"}`, { id: `up-${key}-${(variantIndex ?? 1)}` });
     }
+  };
+
+  const addVariant = (key: VideoKey, file: File) => {
+    const next = getVariants(key).length + 1;
+    return upload(key, file, next);
+  };
+
+  const removeVariant = async (key: VideoKey, variantIndex: number) => {
+    try {
+      await deleteAvatarVideo(key, draft.sessionId, variantIndex);
+    } catch (e) { console.warn(e); }
+    setDraft((d) => {
+      const list = getVariants(key).filter((_, i) => i !== variantIndex - 1);
+      const nextData = { ...d.videoData };
+      if (list.length === 0) delete nextData[key];
+      else nextData[key] = list.length === 1 ? list[0] : list;
+      const updated = { ...d, videoData: nextData };
+      saveSettings(updated);
+      onChange(updated);
+      return updated;
+    });
+    toast.success("Variante removida");
   };
 
   const remove = async (key: VideoKey) => {
