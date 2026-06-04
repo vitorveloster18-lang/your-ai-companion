@@ -143,7 +143,10 @@ export function AvatarCreator({ open, onClose, settings, onChange }: Props) {
   };
 
   const apply = () => {
-    onChange(draft);
+    const next = { ...draft, standbyFreeze: false };
+    saveSettings(next);
+    setDraft(next);
+    onChange(next);
     toast.success("Vídeos aplicados ao avatar");
     onClose();
   };
