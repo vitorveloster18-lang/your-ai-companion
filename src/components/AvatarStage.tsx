@@ -262,15 +262,15 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     // Safety net: some mobile browsers pause or miss `timeupdate`/`ended` on
     // dynamically swapped videos. Keep the visible standby buffer alive.
     useEffect(() => {
-      if (settings.standbyFreeze) return;
+      if (settings.standbyFreeze && getStandbyLiveVariants(settingsRef.current).length <= 1) return;
       const timer = window.setInterval(() => {
         const which = activeStandbyRef.current;
         const el = which === "A" ? standbyARef.current : standbyBRef.current;
         if (!el) return;
-        if (!getVideoVariantsDetailed("standby", settingsRef.current).length) return;
+        if (!getStandbyLiveVariants(settingsRef.current).length) return;
 
         if (!el.src) {
-          const v = pickVariant("standby", true);
+          const v = pickStandbyLiveVariant();
           if (v) {
             startPlayback(el, v, { loop: false });
             el.style.opacity = "1";
