@@ -18,6 +18,8 @@ export type AvatarStageHandle = {
 
 type Props = { settings: AppSettings; onStateChange?: (key: VideoKey) => void };
 
+const ignoreMediaError = (_error: unknown) => {};
+
 export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
   function AvatarStage({ settings, onStateChange }, ref) {
     // Two standby buffers for seamless crossfade looping (no flash at the end)
