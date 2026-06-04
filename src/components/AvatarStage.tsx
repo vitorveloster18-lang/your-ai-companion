@@ -24,6 +24,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     const standbyBRef = useRef<HTMLVideoElement>(null);
     const activeStandbyRef = useRef<"A" | "B">("A");
     const standbyVariantIdxRef = useRef(0);
+    const standbySwapLockRef = useRef(false);
 
     // Round-robin counters per state for non-standby variants
     const variantCounterRef = useRef<Partial<Record<VideoKey, number>>>({});
@@ -67,6 +68,11 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       el.src = v.url;
       el.loop = opts.loop && !v.out; // if out trim is set we handle ending manually
       el.muted = true;
+      el.preload = "auto";
+      el.dataset.outSec = v.out != null ? String(v.out) : "";
+      el.dataset.inSec = v.in != null ? String(v.in) : "";
+      el.dataset.nextReady = "";
+      el.dataset.prepared = "";
       const apply = () => {
         try { if (typeof v.in === "number" && v.in > 0) el.currentTime = v.in; } catch {}
         el.play().catch(() => {});
