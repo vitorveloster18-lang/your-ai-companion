@@ -18,7 +18,9 @@ export type AvatarStageHandle = {
 
 type Props = { settings: AppSettings; onStateChange?: (key: VideoKey) => void };
 
-const ignoreMediaError = (_error: unknown) => {};
+const ignoreMediaError = (_error: unknown) => {
+  void _error;
+};
 
 export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
   function AvatarStage({ settings, onStateChange }, ref) {
