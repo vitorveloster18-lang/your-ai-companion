@@ -236,6 +236,51 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       performStandbySwap(which);
     };
 
+    // Safety net: some mobile browsers pause or miss `timeupdate`/`ended` on
+    // dynamically swapped videos. Keep the visible standby buffer alive.
+    useEffect(() => {
+      if (settings.standbyFreeze) return;
+      const timer = window.setInterval(() => {
+        const which = activeStandbyRef.current;
+        const el = which === "A" ? standbyARef.current : standbyBRef.current;
+        if (!el) return;
+        if (!getVideoVariantsDetailed("standby", settingsRef.current).length) return;
+
+        if (!el.src) {
+          const v = pickVariant("standby", true);
+          if (v) {
+            startPlayback(el, v, { loop: false });
+            el.style.opacity = "1";
+          }
+          return;
+        }
+
+        const outAttr = el.dataset.outSec ? parseFloat(el.dataset.outSec) : NaN;
+        const effectiveEnd = isFinite(outAttr) && outAttr > 0 ? outAttr : el.duration;
+        if (el.ended || (isFinite(effectiveEnd) && effectiveEnd > 0 && el.currentTime >= effectiveEnd - 0.04)) {
+          performStandbySwap(which);
+          return;
+        }
+
+        if (el.paused && el.readyState >= 2) {
+          el.play().catch(() => {});
+          return;
+        }
+
+        const last = parseFloat(el.dataset.lastTime || "-1");
+        const stillTicks = parseInt(el.dataset.stillTicks || "0", 10);
+        if (!el.paused && el.readyState >= 2 && Math.abs(el.currentTime - last) < 0.01) {
+          const nextTicks = stillTicks + 1;
+          el.dataset.stillTicks = String(nextTicks);
+          if (nextTicks >= 5) performStandbySwap(which);
+        } else {
+          el.dataset.stillTicks = "0";
+        }
+        el.dataset.lastTime = String(el.currentTime);
+      }, 250);
+      return () => window.clearInterval(timer);
+    }, [settings.videoData, settings.videoClips, settings.standbyFreeze]);
+
     // For state/transition/emotion: monitor time vs "out" trim and end the clip early
     const watchTrim = (el: HTMLVideoElement, v: VariantDetail, onEnd: () => void) => {
       if (v.out == null || v.out <= 0) return;
