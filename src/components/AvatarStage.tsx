@@ -64,6 +64,27 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       return variants[i];
     };
 
+    const getStandbyLiveVariants = (s: AppSettings): VariantDetail[] => {
+      const loopKeys = VIDEO_LIBRARY
+        .filter((v) => v.category === "loop")
+        .map((v) => v.key);
+      const orderedKeys: VideoKey[] = [
+        "standby",
+        ...loopKeys.filter((key) => key !== "standby"),
+      ];
+      return orderedKeys.flatMap((key) => getVideoVariantsDetailed(key, s));
+    };
+
+    const pickStandbyLiveVariant = (): VariantDetail | null => {
+      const variants = getStandbyLiveVariants(settingsRef.current);
+      if (!variants.length) return null;
+      const mode = settingsRef.current.variantMode?.standby ?? "round-robin";
+      if (mode === "random") return variants[Math.floor(Math.random() * variants.length)];
+      const i = standbyVariantIdxRef.current % variants.length;
+      standbyVariantIdxRef.current = (i + 1) % variants.length;
+      return variants[i];
+    };
+
     // Apply in/out trimming when starting a video on an element
     const startPlayback = (el: HTMLVideoElement, v: VariantDetail, opts: { loop: boolean }) => {
       el.src = v.url;
