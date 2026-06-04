@@ -106,7 +106,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     // ===== Standby management =====
     useEffect(() => {
       const s = settingsRef.current;
-      const variants = getVideoVariantsDetailed("standby", s);
+      const variants = getStandbyLiveVariants(s);
       const a = standbyARef.current;
       const b = standbyBRef.current;
       if (!a || !b) return;
@@ -167,7 +167,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       // If the hidden buffer was not explicitly prepared as the next clip,
       // load a fresh variant instead of swapping back to an ended/old frame.
       if (other.dataset.prepared !== "1") {
-        const next = pickVariant("standby", true);
+        const next = pickStandbyLiveVariant();
         if (!next) { standbySwapLockRef.current = false; return false; }
         other.src = next.url;
         other.loop = false;
@@ -224,7 +224,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       // 1) Preload next variant well before the end (buffered, paused, hidden)
       const preloadAt = Math.max(0.6, (s.crossfadeThresholdMs ?? 600) / 1000);
       if (remaining < preloadAt && cur.dataset.nextReady !== "1") {
-        const next = pickVariant("standby", true);
+        const next = pickStandbyLiveVariant();
         if (!next) return;
         cur.dataset.nextReady = "1";
         other.src = next.url;
