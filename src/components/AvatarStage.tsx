@@ -139,16 +139,26 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       const cur = which === "A" ? standbyARef.current : standbyBRef.current;
       const other = which === "A" ? standbyBRef.current : standbyARef.current;
       if (!cur || !other) return false;
-      // If other is not loaded with a next clip, prepare one on the fly
-      if (!other.src || other.readyState < 2) {
+      if (standbySwapLockRef.current) return false;
+      standbySwapLockRef.current = true;
+      // If the hidden buffer was not explicitly prepared as the next clip,
+      // load a fresh variant instead of swapping back to an ended/old frame.
+      if (other.dataset.prepared !== "1") {
         const next = pickVariant("standby", true);
-        if (!next) return false;
+        if (!next) { standbySwapLockRef.current = false; return false; }
         other.src = next.url;
         other.loop = false;
         other.muted = true;
+        other.preload = "auto";
         other.dataset.outSec = next.out != null ? String(next.out) : "";
         other.dataset.inSec = next.in != null ? String(next.in) : "";
-        try { if (next.in && next.in > 0) other.currentTime = next.in; } catch {}
+        other.dataset.nextReady = "";
+        other.dataset.prepared = "1";
+        const setStart = () => {
+          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch {}
+        };
+        if (other.readyState >= 1) setStart();
+        else other.addEventListener("loadedmetadata", setStart, { once: true });
       }
       // Instant hard-swap (no fade) for true gapless continuity
       other.style.transition = "none";
@@ -160,13 +170,18 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       // Clear flags so the next cycle preloads again
       cur.dataset.nextReady = "";
       other.dataset.nextReady = "";
+      cur.dataset.prepared = "";
+      other.dataset.prepared = "";
       setTimeout(() => {
         try { cur.pause(); } catch {}
         try { cur.currentTime = 0; } catch {}
+        cur.removeAttribute("src");
+        try { cur.load(); } catch {}
         // Restore transition for future crossfades on state/emotion layers
         const ms = Math.max(50, s.crossfadeMs ?? 600);
         cur.style.transition = `opacity ${ms}ms ease`;
         other.style.transition = `opacity ${ms}ms ease`;
+        standbySwapLockRef.current = false;
       }, 30);
       return true;
     };
