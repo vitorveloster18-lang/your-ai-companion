@@ -126,7 +126,10 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       settings.variantStart,
     ]);
 
-    // Crossfade: when active buffer approaches its effective end, prep & fade in the other
+    // Gapless concatenation between standby variants:
+    //  - preload the next variant on the other buffer ~1s before the end
+    //  - swap instantly (no crossfade) at the exact end of the current clip
+    // This creates a continuous "living" state without visible cuts or fades.
     const handleStandbyTimeUpdate = (which: "A" | "B") => {
       const s = settingsRef.current;
       if (s.standbyFreeze) return;
@@ -135,22 +138,50 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       const other = which === "A" ? standbyBRef.current : standbyARef.current;
       if (!cur || !other || !cur.duration || isNaN(cur.duration)) return;
 
-      // Determine effective end using "out" clip if set (we stored it on dataset)
       const outAttr = cur.dataset.outSec ? parseFloat(cur.dataset.outSec) : NaN;
       const effectiveEnd = isFinite(outAttr) && outAttr > 0 ? outAttr : cur.duration;
       const remaining = effectiveEnd - cur.currentTime;
-      const thresholdSec = Math.max(0.1, (s.crossfadeThresholdMs ?? 600) / 1000);
 
-      if (remaining < thresholdSec && other.paused) {
+      // 1) Preload next variant well before the end (buffered, paused, hidden)
+      const preloadAt = Math.max(0.6, (s.crossfadeThresholdMs ?? 600) / 1000);
+      if (remaining < preloadAt && !cur.dataset.nextReady) {
         const next = pickVariant("standby", true);
         if (!next) return;
-        startPlayback(other, next, { loop: false });
+        cur.dataset.nextReady = "1";
+        other.src = next.url;
+        other.loop = false;
+        other.muted = true;
+        other.style.transition = "none";
+        other.style.opacity = "0";
         other.dataset.outSec = next.out != null ? String(next.out) : "";
+        other.dataset.inSec = next.in != null ? String(next.in) : "";
+        const prep = () => {
+          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch {}
+          try { other.pause(); } catch {}
+        };
+        if (other.readyState >= 2) prep();
+        else other.addEventListener("loadeddata", prep, { once: true });
+      }
+
+      // 2) At the very end, hard-swap: play other, hide current instantly
+      if (remaining <= 0.06 && other.dataset.nextReady !== "playing") {
+        other.dataset.nextReady = "playing";
+        cur.dataset.nextReady = "";
+        // Instant swap (no fade) for true gapless continuity
+        other.style.transition = "none";
+        cur.style.transition = "none";
         other.style.opacity = "1";
         cur.style.opacity = "0";
+        other.play().catch(() => {});
         activeStandbyRef.current = which === "A" ? "B" : "A";
-        const fadeMs = Math.max(50, s.crossfadeMs ?? 600) + 100;
-        setTimeout(() => { try { cur.pause(); } catch {} }, fadeMs);
+        // Pause the now-hidden buffer on next tick
+        setTimeout(() => {
+          try { cur.pause(); } catch {}
+          // Restore transition for future crossfades (state/emotion layers still use it)
+          const ms = Math.max(50, s.crossfadeMs ?? 600);
+          cur.style.transition = `opacity ${ms}ms ease`;
+          other.style.transition = `opacity ${ms}ms ease`;
+        }, 30);
       }
     };
 
