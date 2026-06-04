@@ -96,7 +96,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       el.dataset.nextReady = "";
       el.dataset.prepared = "";
       const apply = () => {
-        try { if (typeof v.in === "number" && v.in > 0) el.currentTime = v.in; } catch {}
+        try { if (typeof v.in === "number" && v.in > 0) el.currentTime = v.in; } catch { undefined; }
         el.play().catch(() => {});
       };
       if (el.readyState >= 1) apply();
@@ -127,14 +127,14 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         a.muted = true;
         const freezeAt = Math.max(0, s.standbyFreezeAt ?? 0);
         const apply = () => {
-          try { a.currentTime = freezeAt; } catch {}
-          try { a.pause(); } catch {}
+          try { a.currentTime = freezeAt; } catch { undefined; }
+          try { a.pause(); } catch { undefined; }
         };
         if (a.readyState >= 1) apply();
         else a.addEventListener("loadedmetadata", apply, { once: true });
         a.style.opacity = "1";
         b.style.opacity = "0";
-        try { b.pause(); } catch {}
+        try { b.pause(); } catch { undefined; }
         activeStandbyRef.current = "A";
         return;
       }
@@ -145,7 +145,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       startPlayback(a, first, { loop: false });
       a.style.opacity = "1";
       b.style.opacity = "0";
-      try { b.pause(); } catch {}
+      try { b.pause(); } catch { undefined; }
       activeStandbyRef.current = "A";
     }, [
       settings.videoData,
@@ -178,7 +178,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         other.dataset.nextReady = "";
         other.dataset.prepared = "1";
         const setStart = () => {
-          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch {}
+          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch { undefined; }
         };
         if (other.readyState >= 1) setStart();
         else other.addEventListener("loadedmetadata", setStart, { once: true });
@@ -196,10 +196,10 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       cur.dataset.prepared = "";
       other.dataset.prepared = "";
       setTimeout(() => {
-        try { cur.pause(); } catch {}
-        try { cur.currentTime = 0; } catch {}
+        try { cur.pause(); } catch { undefined; }
+        try { cur.currentTime = 0; } catch { undefined; }
         cur.removeAttribute("src");
-        try { cur.load(); } catch {}
+        try { cur.load(); } catch { undefined; }
         // Restore transition for future crossfades on state/emotion layers
         const ms = Math.max(50, s.crossfadeMs ?? 600);
         cur.style.transition = `opacity ${ms}ms ease`;
@@ -238,8 +238,8 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         other.dataset.prepared = "1";
         other.dataset.nextReady = "";
         const prep = () => {
-          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch {}
-          try { other.pause(); } catch {}
+          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch { undefined; }
+          try { other.pause(); } catch { undefined; }
         };
         if (other.readyState >= 2) prep();
         else other.addEventListener("loadeddata", prep, { once: true });
@@ -331,7 +331,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
         if (!el) { cb?.(); return; }
         el.style.opacity = "0";
-        setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, ms);
+        setTimeout(() => { try { el.pause(); } catch { undefined; } cb?.(); }, ms);
       },
       playTransition(key, cb) {
         const el = transitionRef.current;
@@ -344,7 +344,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         const done = () => {
           el.onended = null;
           el.style.opacity = "0";
-          setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, ms);
+          setTimeout(() => { try { el.pause(); } catch { undefined; } cb?.(); }, ms);
         };
         el.onended = done;
         watchTrim(el, v, done);
@@ -360,7 +360,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         const done = () => {
           el.onended = null;
           el.style.opacity = "0";
-          setTimeout(() => { try { el.pause(); } catch {} cb?.(); }, ms);
+          setTimeout(() => { try { el.pause(); } catch { undefined; } cb?.(); }, ms);
         };
         el.onended = done;
         watchTrim(el, v, done);
