@@ -126,10 +126,45 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       settings.variantStart,
     ]);
 
-    // Gapless concatenation between standby variants:
-    //  - preload the next variant on the other buffer ~1s before the end
-    //  - swap instantly (no crossfade) at the exact end of the current clip
-    // This creates a continuous "living" state without visible cuts or fades.
+    // Gapless concatenation between standby variants.
+    // Returns true if a swap was performed.
+    const performStandbySwap = (which: "A" | "B"): boolean => {
+      const s = settingsRef.current;
+      const cur = which === "A" ? standbyARef.current : standbyBRef.current;
+      const other = which === "A" ? standbyBRef.current : standbyARef.current;
+      if (!cur || !other) return false;
+      // If other is not loaded with a next clip, prepare one on the fly
+      if (!other.src || other.readyState < 2) {
+        const next = pickVariant("standby", true);
+        if (!next) return false;
+        other.src = next.url;
+        other.loop = false;
+        other.muted = true;
+        other.dataset.outSec = next.out != null ? String(next.out) : "";
+        other.dataset.inSec = next.in != null ? String(next.in) : "";
+        try { if (next.in && next.in > 0) other.currentTime = next.in; } catch {}
+      }
+      // Instant hard-swap (no fade) for true gapless continuity
+      other.style.transition = "none";
+      cur.style.transition = "none";
+      other.style.opacity = "1";
+      cur.style.opacity = "0";
+      other.play().catch(() => {});
+      activeStandbyRef.current = which === "A" ? "B" : "A";
+      // Clear flags so the next cycle preloads again
+      cur.dataset.nextReady = "";
+      other.dataset.nextReady = "";
+      setTimeout(() => {
+        try { cur.pause(); } catch {}
+        try { cur.currentTime = 0; } catch {}
+        // Restore transition for future crossfades on state/emotion layers
+        const ms = Math.max(50, s.crossfadeMs ?? 600);
+        cur.style.transition = `opacity ${ms}ms ease`;
+        other.style.transition = `opacity ${ms}ms ease`;
+      }, 30);
+      return true;
+    };
+
     const handleStandbyTimeUpdate = (which: "A" | "B") => {
       const s = settingsRef.current;
       if (s.standbyFreeze) return;
@@ -144,7 +179,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
 
       // 1) Preload next variant well before the end (buffered, paused, hidden)
       const preloadAt = Math.max(0.6, (s.crossfadeThresholdMs ?? 600) / 1000);
-      if (remaining < preloadAt && !cur.dataset.nextReady) {
+      if (remaining < preloadAt && cur.dataset.nextReady !== "1") {
         const next = pickVariant("standby", true);
         if (!next) return;
         cur.dataset.nextReady = "1";
@@ -164,25 +199,17 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       }
 
       // 2) At the very end, hard-swap: play other, hide current instantly
-      if (remaining <= 0.06 && other.dataset.nextReady !== "playing") {
-        other.dataset.nextReady = "playing";
-        cur.dataset.nextReady = "";
-        // Instant swap (no fade) for true gapless continuity
-        other.style.transition = "none";
-        cur.style.transition = "none";
-        other.style.opacity = "1";
-        cur.style.opacity = "0";
-        other.play().catch(() => {});
-        activeStandbyRef.current = which === "A" ? "B" : "A";
-        // Pause the now-hidden buffer on next tick
-        setTimeout(() => {
-          try { cur.pause(); } catch {}
-          // Restore transition for future crossfades (state/emotion layers still use it)
-          const ms = Math.max(50, s.crossfadeMs ?? 600);
-          cur.style.transition = `opacity ${ms}ms ease`;
-          other.style.transition = `opacity ${ms}ms ease`;
-        }, 30);
+      if (remaining <= 0.08) {
+        performStandbySwap(which);
       }
+    };
+
+    // Fallback: if timeupdate misses the swap window, the `ended` event recovers
+    const handleStandbyEnded = (which: "A" | "B") => {
+      const s = settingsRef.current;
+      if (s.standbyFreeze) return;
+      if (activeStandbyRef.current !== which) return;
+      performStandbySwap(which);
     };
 
     // For state/transition/emotion: monitor time vs "out" trim and end the clip early
