@@ -96,8 +96,9 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       const start = Math.max(1, s.variantStart?.["standby"] ?? 1);
       standbyVariantIdxRef.current = (start - 1) % variants.length;
 
-      // FREEZE MODE — single static frame, no looping
-      if (s.standbyFreeze) {
+      // FREEZE MODE — only for a single static standby clip. When multiple
+      // standby variants exist, the avatar should stay "alive" by chaining them.
+      if (s.standbyFreeze && variants.length <= 1) {
         const v = variants[standbyVariantIdxRef.current % variants.length];
         a.src = v.url;
         a.loop = false;
@@ -188,7 +189,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
 
     const handleStandbyTimeUpdate = (which: "A" | "B") => {
       const s = settingsRef.current;
-      if (s.standbyFreeze) return;
+      if (s.standbyFreeze && getVideoVariantsDetailed("standby", s).length <= 1) return;
       if (activeStandbyRef.current !== which) return;
       const cur = which === "A" ? standbyARef.current : standbyBRef.current;
       const other = which === "A" ? standbyBRef.current : standbyARef.current;
@@ -231,7 +232,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     // Fallback: if timeupdate misses the swap window, the `ended` event recovers
     const handleStandbyEnded = (which: "A" | "B") => {
       const s = settingsRef.current;
-      if (s.standbyFreeze) return;
+      if (s.standbyFreeze && getVideoVariantsDetailed("standby", s).length <= 1) return;
       if (activeStandbyRef.current !== which) return;
       performStandbySwap(which);
     };
