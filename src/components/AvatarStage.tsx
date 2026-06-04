@@ -290,12 +290,14 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
           ref={standbyARef}
           autoPlay muted playsInline
           onTimeUpdate={() => handleStandbyTimeUpdate("A")}
+          onEnded={() => handleStandbyEnded("A")}
         />
         <video
           id="layer-standby-b"
           ref={standbyBRef}
           muted playsInline
           onTimeUpdate={() => handleStandbyTimeUpdate("B")}
+          onEnded={() => handleStandbyEnded("B")}
         />
         <video id="layer-state" ref={stateRef} muted playsInline />
         <video id="layer-transition" ref={transitionRef} muted playsInline />
