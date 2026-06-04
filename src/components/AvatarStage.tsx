@@ -207,10 +207,13 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         other.src = next.url;
         other.loop = false;
         other.muted = true;
+        other.preload = "auto";
         other.style.transition = "none";
         other.style.opacity = "0";
         other.dataset.outSec = next.out != null ? String(next.out) : "";
         other.dataset.inSec = next.in != null ? String(next.in) : "";
+        other.dataset.prepared = "1";
+        other.dataset.nextReady = "";
         const prep = () => {
           try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch {}
           try { other.pause(); } catch {}
