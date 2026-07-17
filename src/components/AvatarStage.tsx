@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import {
   type AppSettings,
   type VideoKey,
@@ -24,12 +24,14 @@ const ignoreMediaError = (_error: unknown) => {
 
 export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
   function AvatarStage({ settings, onStateChange }, ref) {
-    // Two standby buffers for seamless crossfade looping (no flash at the end)
+    // Two standby buffers for a living remix playlist. One is visible while the
+    // next clip is already buffered and playing invisibly, then we swap layers.
     const standbyARef = useRef<HTMLVideoElement>(null);
     const standbyBRef = useRef<HTMLVideoElement>(null);
     const activeStandbyRef = useRef<"A" | "B">("A");
     const standbyVariantIdxRef = useRef(0);
     const standbySwapLockRef = useRef(false);
+    const standbyPoolSignatureRef = useRef("");
 
     // Round-robin counters per state for non-standby variants
     const variantCounterRef = useRef<Partial<Record<VideoKey, number>>>({});
@@ -69,17 +71,18 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     };
 
     const getStandbyLiveVariants = (s: AppSettings): VariantDetail[] => {
-      const loopKeys = VIDEO_LIBRARY
-        .filter((v) => v.category === "loop")
-        .map((v) => v.key);
+      // "Estado vivo" = remixar todos os vídeos carregados no Avatar Creator.
+      // Standby começa a fila para manter a pose-base, depois entram loops,
+      // emoções e transições como micro-movimentos. O player nunca usa loop
+      // nativo aqui: ele concatena clipe por clipe.
       const orderedKeys: VideoKey[] = [
         "standby",
-        ...loopKeys.filter((key) => key !== "standby"),
+        ...VIDEO_LIBRARY.filter((v) => v.key !== "standby").map((v) => v.key),
       ];
       return orderedKeys.flatMap((key) => getVideoVariantsDetailed(key, s));
     };
 
-    const pickStandbyLiveVariant = (): VariantDetail | null => {
+    const pickStandbyLiveVariant = useCallback((): VariantDetail | null => {
       const variants = getStandbyLiveVariants(settingsRef.current);
       if (!variants.length) return null;
       const mode = settingsRef.current.variantMode?.standby ?? "round-robin";
@@ -87,7 +90,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       const i = standbyVariantIdxRef.current % variants.length;
       standbyVariantIdxRef.current = (i + 1) % variants.length;
       return variants[i];
-    };
+    }, []);
 
     // Apply in/out trimming when starting a video on an element
     const startPlayback = (el: HTMLVideoElement, v: VariantDetail, opts: { loop: boolean }) => {
@@ -99,6 +102,9 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       el.dataset.inSec = v.in != null ? String(v.in) : "";
       el.dataset.nextReady = "";
       el.dataset.prepared = "";
+      el.dataset.playingHidden = "";
+      el.dataset.lastTime = "";
+      el.dataset.stillTicks = "0";
       const apply = () => {
         try { if (typeof v.in === "number" && v.in > 0) el.currentTime = v.in; } catch (error) { ignoreMediaError(error); }
         el.play().catch(() => {});
@@ -143,7 +149,11 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
         return;
       }
 
-      // LOOP MODE — start the first variant, advance the rr index
+      const signature = variants.map((v) => `${v.url}|${v.in ?? ""}|${v.out ?? ""}`).join("::");
+      standbyPoolSignatureRef.current = signature;
+
+      // LIVE REMIX MODE — start the first clip, then the timeupdate handler
+      // keeps preparing the next clip on the hidden layer before each swap.
       const first = variants[standbyVariantIdxRef.current % variants.length];
       standbyVariantIdxRef.current = (standbyVariantIdxRef.current + 1) % variants.length;
       startPlayback(a, first, { loop: false });
@@ -159,59 +169,75 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       settings.variantStart,
     ]);
 
-    // Gapless concatenation between standby variants.
-    // Returns true if a swap was performed.
-    const performStandbySwap = (which: "A" | "B"): boolean => {
-      const s = settingsRef.current;
+    const prepareHiddenStandby = useCallback((hidden: HTMLVideoElement): boolean => {
+      if (hidden.dataset.prepared === "1") return true;
+      const next = pickStandbyLiveVariant();
+      if (!next) return false;
+      hidden.src = next.url;
+      hidden.loop = false;
+      hidden.muted = true;
+      hidden.preload = "auto";
+      hidden.style.transition = "none";
+      hidden.style.opacity = "0";
+      hidden.dataset.outSec = next.out != null ? String(next.out) : "";
+      hidden.dataset.inSec = next.in != null ? String(next.in) : "";
+      hidden.dataset.nextReady = "";
+      hidden.dataset.prepared = "1";
+      hidden.dataset.playingHidden = "";
+      hidden.dataset.lastTime = "";
+      hidden.dataset.stillTicks = "0";
+      const startAt = next.in && next.in > 0 ? next.in : 0;
+      const prep = () => {
+        try { hidden.currentTime = startAt; } catch (error) { ignoreMediaError(error); }
+      };
+      if (hidden.readyState >= 1) prep();
+      else hidden.addEventListener("loadedmetadata", prep, { once: true });
+      return true;
+    }, [pickStandbyLiveVariant]);
+
+    const playHiddenStandby = (hidden: HTMLVideoElement) => {
+      if (hidden.dataset.playingHidden === "1") return;
+      hidden.dataset.playingHidden = "1";
+      hidden.play().catch(() => {
+        hidden.dataset.playingHidden = "";
+      });
+    };
+
+    // Concatenate the remix playlist by swapping to a clip that is already
+    // running invisibly. This avoids waiting on play() at the final frame.
+    const performStandbySwap = useCallback((which: "A" | "B"): boolean => {
       const cur = which === "A" ? standbyARef.current : standbyBRef.current;
       const other = which === "A" ? standbyBRef.current : standbyARef.current;
       if (!cur || !other) return false;
       if (standbySwapLockRef.current) return false;
       standbySwapLockRef.current = true;
-      // If the hidden buffer was not explicitly prepared as the next clip,
-      // load a fresh variant instead of swapping back to an ended/old frame.
-      if (other.dataset.prepared !== "1") {
-        const next = pickStandbyLiveVariant();
-        if (!next) { standbySwapLockRef.current = false; return false; }
-        other.src = next.url;
-        other.loop = false;
-        other.muted = true;
-        other.preload = "auto";
-        other.dataset.outSec = next.out != null ? String(next.out) : "";
-        other.dataset.inSec = next.in != null ? String(next.in) : "";
-        other.dataset.nextReady = "";
-        other.dataset.prepared = "1";
-        const setStart = () => {
-          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch (error) { ignoreMediaError(error); }
-        };
-        if (other.readyState >= 1) setStart();
-        else other.addEventListener("loadedmetadata", setStart, { once: true });
+      if (!prepareHiddenStandby(other)) {
+        standbySwapLockRef.current = false;
+        return false;
       }
-      // Instant hard-swap (no fade) for true gapless continuity
+
+      playHiddenStandby(other);
       other.style.transition = "none";
       cur.style.transition = "none";
       other.style.opacity = "1";
       cur.style.opacity = "0";
-      other.play().catch(() => {});
       activeStandbyRef.current = which === "A" ? "B" : "A";
-      // Clear flags so the next cycle preloads again
       cur.dataset.nextReady = "";
       other.dataset.nextReady = "";
       cur.dataset.prepared = "";
-      other.dataset.prepared = "";
+      cur.dataset.playingHidden = "";
       setTimeout(() => {
         try { cur.pause(); } catch (error) { ignoreMediaError(error); }
         try { cur.currentTime = 0; } catch (error) { ignoreMediaError(error); }
         cur.removeAttribute("src");
         try { cur.load(); } catch (error) { ignoreMediaError(error); }
-        // Restore transition for future crossfades on state/emotion layers
-        const ms = Math.max(50, s.crossfadeMs ?? 600);
+        const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
         cur.style.transition = `opacity ${ms}ms ease`;
         other.style.transition = `opacity ${ms}ms ease`;
         standbySwapLockRef.current = false;
       }, 30);
       return true;
-    };
+    }, [prepareHiddenStandby]);
 
     const handleStandbyTimeUpdate = (which: "A" | "B") => {
       const s = settingsRef.current;
@@ -225,32 +251,21 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       const effectiveEnd = isFinite(outAttr) && outAttr > 0 ? outAttr : cur.duration;
       const remaining = effectiveEnd - cur.currentTime;
 
-      // 1) Preload next variant well before the end (buffered, paused, hidden)
-      const preloadAt = Math.max(0.6, (s.crossfadeThresholdMs ?? 600) / 1000);
+      // 1) Prepare the next remix clip before the end.
+      const preloadAt = Math.max(1.2, (s.crossfadeThresholdMs ?? 600) / 1000);
       if (remaining < preloadAt && cur.dataset.nextReady !== "1") {
-        const next = pickStandbyLiveVariant();
-        if (!next) return;
         cur.dataset.nextReady = "1";
-        other.src = next.url;
-        other.loop = false;
-        other.muted = true;
-        other.preload = "auto";
-        other.style.transition = "none";
-        other.style.opacity = "0";
-        other.dataset.outSec = next.out != null ? String(next.out) : "";
-        other.dataset.inSec = next.in != null ? String(next.in) : "";
-        other.dataset.prepared = "1";
-        other.dataset.nextReady = "";
-        const prep = () => {
-          try { other.currentTime = next.in && next.in > 0 ? next.in : 0; } catch (error) { ignoreMediaError(error); }
-          try { other.pause(); } catch (error) { ignoreMediaError(error); }
-        };
-        if (other.readyState >= 2) prep();
-        else other.addEventListener("loadeddata", prep, { once: true });
+        prepareHiddenStandby(other);
       }
 
-      // 2) At the very end, hard-swap: play other, hide current instantly
-      if (remaining <= 0.08) {
+      // 2) Start the hidden clip shortly before the swap so it is already alive.
+      const playAheadAt = Math.max(0.18, Math.min(0.45, preloadAt / 3));
+      if (remaining < playAheadAt && other.dataset.prepared === "1") {
+        playHiddenStandby(other);
+      }
+
+      // 3) Swap before the current clip reaches its terminal frame.
+      if (remaining <= 0.12) {
         performStandbySwap(which);
       }
     };
