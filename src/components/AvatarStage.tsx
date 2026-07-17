@@ -3,7 +3,6 @@ import {
   type AppSettings,
   type VideoKey,
   type VariantDetail,
-  VIDEO_LIBRARY,
   getVideoSrc,
   getVideoVariantsDetailed,
 } from "@/lib/settings";
@@ -24,8 +23,9 @@ const ignoreMediaError = (_error: unknown) => {
 
 export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
   function AvatarStage({ settings, onStateChange }, ref) {
-    // Two standby buffers for a living remix playlist. One is visible while the
-    // next clip is already buffered and playing invisibly, then we swap layers.
+    // Two standby buffers for the neutral/base standby only. Interaction states
+    // (listening, thinking, speaking, transitions and emotions) are never part
+    // of this passive loop; they play only when explicitly triggered.
     const standbyARef = useRef<HTMLVideoElement>(null);
     const standbyBRef = useRef<HTMLVideoElement>(null);
     const activeStandbyRef = useRef<"A" | "B">("A");
@@ -71,15 +71,10 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     };
 
     const getStandbyLiveVariants = (s: AppSettings): VariantDetail[] => {
-      // "Estado vivo" = remixar todos os vídeos carregados no Avatar Creator.
-      // Standby começa a fila para manter a pose-base, depois entram loops,
-      // emoções e transições como micro-movimentos. O player nunca usa loop
-      // nativo aqui: ele concatena clipe por clipe.
-      const orderedKeys: VideoKey[] = [
-        "standby",
-        ...VIDEO_LIBRARY.filter((v) => v.key !== "standby").map((v) => v.key),
-      ];
-      return orderedKeys.flatMap((key) => getVideoVariantsDetailed(key, s));
+      // "Estado vivo" here means multiple takes of the same neutral standby
+      // pose, not a remix of every generated state. The avatar should not smile,
+      // listen, speak, think, or transition unless the user/app triggers that.
+      return getVideoVariantsDetailed("standby", s);
     };
 
     const pickStandbyLiveVariant = useCallback((): VariantDetail | null => {
