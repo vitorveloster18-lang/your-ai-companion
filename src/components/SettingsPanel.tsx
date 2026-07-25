@@ -201,7 +201,7 @@ export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
               <select value={draft.voiceName}
                 onChange={(e) => update("voiceName", e.target.value)}>
                 <option value="">(padrão do navegador)</option>
-                {voices.map((v) => (<option key={v.name} value={v.name}>{v.name} — {v.lang}</option>))}
+                {voices.map((v, index) => (<option key={`${v.name}-${v.lang}-${index}`} value={v.name}>{v.name} — {v.lang}</option>))}
               </select>
             </label>
             <label className="toggle-row">

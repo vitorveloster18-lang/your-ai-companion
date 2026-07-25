@@ -50,7 +50,7 @@ body {
   background: transparent;
 }
 #layer-standby, #layer-standby-b { z-index: 1; transition: opacity 0.6s ease; }
-#layer-state { z-index: 2; }
+#layer-state, #layer-state-b { z-index: 2; }
 #layer-transition { z-index: 3; }
 #layer-emotion { z-index: 4; }
 

@@ -13,7 +13,19 @@ import {
   loadAvatarVideos,
 } from "@/lib/settings";
 
-export const Route = createFileRoute("/")({ component: AgentPage });
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Avatar Agent Studio" },
+      { name: "description", content: "Interface de avatar em vídeo com estados interativos, voz, legenda e configurações persistentes." },
+      { property: "og:title", content: "Avatar Agent Studio" },
+      { property: "og:description", content: "Avatar em vídeo com estados vivos acionados por interação, voz e legenda minimalista." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: AgentPage,
+});
 
 const STATUS_LABELS: Record<string, string> = {
   standby: "Em standby",
