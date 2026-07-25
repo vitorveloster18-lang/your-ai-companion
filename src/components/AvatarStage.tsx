@@ -36,7 +36,11 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     // Round-robin counters per state for non-standby variants
     const variantCounterRef = useRef<Partial<Record<VideoKey, number>>>({});
 
-    const stateRef = useRef<HTMLVideoElement>(null);
+    const stateARef = useRef<HTMLVideoElement>(null);
+    const stateBRef = useRef<HTMLVideoElement>(null);
+    const activeStateLayerRef = useRef<"A" | "B">("A");
+    const activeStateKeyRef = useRef<VideoKey | null>(null);
+    const stateSwapLockRef = useRef(false);
     const transitionRef = useRef<HTMLVideoElement>(null);
     const emotionRef = useRef<HTMLVideoElement>(null);
 
@@ -46,7 +50,7 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
     // Apply crossfade duration CSS variable
     useEffect(() => {
       const ms = Math.max(50, settings.crossfadeMs ?? 600);
-      [standbyARef, standbyBRef, stateRef, transitionRef, emotionRef].forEach((r) => {
+      [standbyARef, standbyBRef, stateARef, stateBRef, transitionRef, emotionRef].forEach((r) => {
         if (r.current) r.current.style.transitionDuration = `${ms}ms`;
       });
     }, [settings.crossfadeMs]);
@@ -198,6 +202,25 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       });
     };
 
+    const resetVideoLayer = (el: HTMLVideoElement) => {
+      try { el.pause(); } catch (error) { ignoreMediaError(error); }
+      try { el.currentTime = 0; } catch (error) { ignoreMediaError(error); }
+      el.dataset.outSec = "";
+      el.dataset.inSec = "";
+      el.dataset.nextReady = "";
+      el.dataset.prepared = "";
+      el.dataset.playingHidden = "";
+      el.dataset.lastTime = "";
+      el.dataset.stillTicks = "0";
+    };
+
+    const getEffectiveEnd = (el: HTMLVideoElement): number | null => {
+      const outAttr = el.dataset.outSec ? parseFloat(el.dataset.outSec) : NaN;
+      if (isFinite(outAttr) && outAttr > 0) return outAttr;
+      if (el.duration && isFinite(el.duration)) return el.duration;
+      return null;
+    };
+
     // Concatenate the remix playlist by swapping to a clip that is already
     // running invisibly. This avoids waiting on play() at the final frame.
     const performStandbySwap = useCallback((which: "A" | "B"): boolean => {
@@ -273,6 +296,115 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
       performStandbySwap(which);
     };
 
+    // ===== Interaction-state management =====
+    // Listening/thinking/speaking can also have multiple variants, but they are
+    // chained only while that exact state is active. They never enter standby's
+    // passive playlist.
+    const prepareHiddenState = useCallback((key: VideoKey, hidden: HTMLVideoElement): boolean => {
+      if (hidden.dataset.prepared === "1" && hidden.dataset.stateKey === key) return true;
+      const next = pickVariant(key);
+      if (!next) return false;
+      hidden.src = next.url;
+      hidden.loop = false;
+      hidden.muted = true;
+      hidden.preload = "auto";
+      hidden.style.transition = "none";
+      hidden.style.opacity = "0";
+      hidden.dataset.stateKey = key;
+      hidden.dataset.outSec = next.out != null ? String(next.out) : "";
+      hidden.dataset.inSec = next.in != null ? String(next.in) : "";
+      hidden.dataset.nextReady = "";
+      hidden.dataset.prepared = "1";
+      hidden.dataset.playingHidden = "";
+      hidden.dataset.lastTime = "";
+      hidden.dataset.stillTicks = "0";
+      const startAt = next.in && next.in > 0 ? next.in : 0;
+      const prep = () => {
+        try { hidden.currentTime = startAt; } catch (error) { ignoreMediaError(error); }
+      };
+      if (hidden.readyState >= 1) prep();
+      else hidden.addEventListener("loadedmetadata", prep, { once: true });
+      return true;
+    }, []);
+
+    const performStateSwap = useCallback((which: "A" | "B"): boolean => {
+      const key = activeStateKeyRef.current;
+      if (!key) return false;
+      const cur = which === "A" ? stateARef.current : stateBRef.current;
+      const other = which === "A" ? stateBRef.current : stateARef.current;
+      if (!cur || !other) return false;
+      if (activeStateLayerRef.current !== which) return false;
+      if (stateSwapLockRef.current) return false;
+      stateSwapLockRef.current = true;
+      if (!prepareHiddenState(key, other)) {
+        stateSwapLockRef.current = false;
+        return false;
+      }
+
+      playHiddenStandby(other);
+      other.style.transition = "none";
+      cur.style.transition = "none";
+      other.style.opacity = "1";
+      cur.style.opacity = "0";
+      activeStateLayerRef.current = which === "A" ? "B" : "A";
+      cur.dataset.nextReady = "";
+      cur.dataset.prepared = "";
+      cur.dataset.playingHidden = "";
+      setTimeout(() => {
+        resetVideoLayer(cur);
+        const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
+        cur.style.transition = `opacity ${ms}ms ease`;
+        other.style.transition = `opacity ${ms}ms ease`;
+        stateSwapLockRef.current = false;
+      }, 30);
+      return true;
+    }, [prepareHiddenState]);
+
+    const handleStateTimeUpdate = (which: "A" | "B") => {
+      const key = activeStateKeyRef.current;
+      if (!key || activeStateLayerRef.current !== which) return;
+      const cur = which === "A" ? stateARef.current : stateBRef.current;
+      const other = which === "A" ? stateBRef.current : stateARef.current;
+      if (!cur || !other) return;
+
+      const variants = getVideoVariantsDetailed(key, settingsRef.current);
+      const effectiveEnd = getEffectiveEnd(cur);
+      if (!effectiveEnd) return;
+
+      const startAt = cur.dataset.inSec ? parseFloat(cur.dataset.inSec) || 0 : 0;
+      const remaining = effectiveEnd - cur.currentTime;
+
+      if (variants.length <= 1) {
+        if (remaining <= 0.04 && cur.dataset.outSec) {
+          try { cur.currentTime = startAt; } catch (error) { ignoreMediaError(error); }
+          cur.play().catch(() => {});
+        }
+        return;
+      }
+
+      const preloadAt = Math.max(1.2, (settingsRef.current.crossfadeThresholdMs ?? 600) / 1000);
+      if (remaining < preloadAt && cur.dataset.nextReady !== "1") {
+        cur.dataset.nextReady = "1";
+        prepareHiddenState(key, other);
+      }
+
+      const playAheadAt = Math.max(0.18, Math.min(0.45, preloadAt / 3));
+      if (remaining < playAheadAt && other.dataset.prepared === "1") {
+        playHiddenStandby(other);
+      }
+
+      if (remaining <= 0.12) {
+        performStateSwap(which);
+      }
+    };
+
+    const handleStateEnded = (which: "A" | "B") => {
+      const key = activeStateKeyRef.current;
+      if (!key || activeStateLayerRef.current !== which) return;
+      const variants = getVideoVariantsDetailed(key, settingsRef.current);
+      if (variants.length > 1) performStateSwap(which);
+    };
+
     // Safety net: some mobile browsers pause or miss `timeupdate`/`ended` on
     // dynamically swapped videos. Keep the visible standby buffer alive.
     useEffect(() => {
@@ -332,20 +464,37 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
 
     useImperativeHandle(ref, () => ({
       showState(key, loop = true) {
-        const el = stateRef.current;
-        if (!el) return;
+        const el = stateARef.current;
+        const spare = stateBRef.current;
+        if (!el || !spare) return;
         const v = pickVariant(key);
         if (!v) return;
-        startPlayback(el, v, { loop });
+        activeStateKeyRef.current = loop ? key : null;
+        activeStateLayerRef.current = "A";
+        stateSwapLockRef.current = false;
+        resetVideoLayer(spare);
+        spare.style.opacity = "0";
+        spare.removeAttribute("src");
+        try { spare.load(); } catch (error) { ignoreMediaError(error); }
+        const hasMultipleVariants = getVideoVariantsDetailed(key, settingsRef.current).length > 1;
+        startPlayback(el, v, { loop: loop && !hasMultipleVariants });
         el.style.opacity = "1";
         onStateChange?.(key);
       },
       hideState(cb) {
-        const el = stateRef.current;
+        const el = stateARef.current;
+        const spare = stateBRef.current;
         const ms = Math.max(50, settingsRef.current.crossfadeMs ?? 600);
-        if (!el) { cb?.(); return; }
+        activeStateKeyRef.current = null;
+        stateSwapLockRef.current = false;
+        if (!el || !spare) { cb?.(); return; }
         el.style.opacity = "0";
-        setTimeout(() => { try { el.pause(); } catch (error) { ignoreMediaError(error); } cb?.(); }, ms);
+        spare.style.opacity = "0";
+        setTimeout(() => {
+          resetVideoLayer(el);
+          resetVideoLayer(spare);
+          cb?.();
+        }, ms);
       },
       playTransition(key, cb) {
         const el = transitionRef.current;
@@ -405,7 +554,20 @@ export const AvatarStage = forwardRef<AvatarStageHandle, Props>(
           onTimeUpdate={() => handleStandbyTimeUpdate("B")}
           onEnded={() => handleStandbyEnded("B")}
         />
-        <video id="layer-state" ref={stateRef} muted playsInline />
+        <video
+          id="layer-state"
+          ref={stateARef}
+          muted playsInline
+          onTimeUpdate={() => handleStateTimeUpdate("A")}
+          onEnded={() => handleStateEnded("A")}
+        />
+        <video
+          id="layer-state-b"
+          ref={stateBRef}
+          muted playsInline
+          onTimeUpdate={() => handleStateTimeUpdate("B")}
+          onEnded={() => handleStateEnded("B")}
+        />
         <video id="layer-transition" ref={transitionRef} muted playsInline />
         <video id="layer-emotion" ref={emotionRef} muted playsInline />
       </div>
