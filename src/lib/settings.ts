@@ -192,7 +192,18 @@ export type AppSettings = {
   customApiUrl: string;
   statePrompts: Record<VideoKey, string>;
   stateDurations: Record<VideoKey, number>;
+
+  // Aparência: orb abstrato ou palco de vídeo
+  renderMode: "orb" | "video";
+
+  // Voz — provedor
+  ttsProvider: "webspeech" | "kokoro";
+  kokoroUrl: string;
+  kokoroKey: string;
+  kokoroModel: string;
+  kokoroVoice: string;
 };
+
 
 const SETTINGS_KEY = "agent.settings.v1";
 
@@ -240,7 +251,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customApiUrl: "",
   statePrompts: { ...DEFAULT_STATE_PROMPTS },
   stateDurations: { ...DEFAULT_STATE_DURATIONS },
+
+  renderMode: "orb",
+  ttsProvider: "webspeech",
+  kokoroUrl: "",
+  kokoroKey: "",
+  kokoroModel: "kokoro",
+  kokoroVoice: "af_heart",
 };
+
 
 export function loadSettings(): AppSettings {
   if (typeof window === "undefined") return DEFAULT_SETTINGS;
