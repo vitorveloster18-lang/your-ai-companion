@@ -192,7 +192,18 @@ export type AppSettings = {
   customApiUrl: string;
   statePrompts: Record<VideoKey, string>;
   stateDurations: Record<VideoKey, number>;
+
+  // Aparência: orb abstrato ou palco de vídeo
+  renderMode: "orb" | "video";
+
+  // Voz — provedor
+  ttsProvider: "webspeech" | "kokoro";
+  kokoroUrl: string;
+  kokoroKey: string;
+  kokoroModel: string;
+  kokoroVoice: string;
 };
+
 
 const SETTINGS_KEY = "agent.settings.v1";
 
