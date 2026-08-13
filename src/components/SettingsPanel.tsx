@@ -115,6 +115,94 @@ export function SettingsPanel({
           </button>
 
           <section className="settings-section">
+            <h3>Aparência</h3>
+            <label>Modo de exibição
+              <select value={draft.renderMode}
+                onChange={(e) => update("renderMode", e.target.value as AppSettings["renderMode"])}>
+                <option value="orb">Orb abstrato (ondas)</option>
+                <option value="video">Vídeo (avatar gravado)</option>
+              </select>
+            </label>
+            <small style={{ opacity: 0.7 }}>
+              O orb reage ao áudio em tempo real e muda de cor conforme o humor da resposta.
+            </small>
+          </section>
+
+          <section className="settings-section">
+            <h3>Agentes</h3>
+            {agents.length === 0 && (
+              <small style={{ opacity: 0.7 }}>Nenhum agente. Adicione um Supabase ou local (Python).</small>
+            )}
+            {agents.map((a) => (
+              <div key={a.id} className="agent-card">
+                <div className="agent-card-head">
+                  <label className="toggle-row" style={{ flex: 1 }}>
+                    <span>
+                      <input type="radio" name="active-agent" checked={activeAgentId === a.id}
+                        onChange={() => onActiveAgentChange(a.id)} /> {agentLabel(a)}
+                    </span>
+                  </label>
+                  <button className="btn-ghost" onClick={() => {
+                    onAgentsChange(agents.filter((x) => x.id !== a.id));
+                    if (activeAgentId === a.id) onActiveAgentChange(null);
+                  }}>Remover</button>
+                </div>
+                <label>Nome
+                  <input value={a.name}
+                    onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, name: e.target.value } : x))} />
+                </label>
+                <label>Tipo
+                  <select value={a.type}
+                    onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, type: e.target.value as AgentConfig["type"] } : x))}>
+                    <option value="supabase">Supabase (instância)</option>
+                    <option value="local">Local / Python</option>
+                  </select>
+                </label>
+                <label>{a.type === "supabase" ? "Project URL" : "Endpoint URL"}
+                  <input value={a.url} placeholder={a.type === "supabase" ? "https://xxx.supabase.co" : "http://localhost:8000/chat"}
+                    onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, url: e.target.value } : x))} />
+                </label>
+                {a.type === "supabase" ? (
+                  <>
+                    <label>Anon Key
+                      <input value={a.key || ""}
+                        onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, key: e.target.value } : x))} />
+                    </label>
+                    <label>Edge Function
+                      <input value={a.functionName || "chat"}
+                        onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, functionName: e.target.value } : x))} />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label>Método
+                      <select value={a.method || "POST"}
+                        onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, method: e.target.value as "POST" | "GET" } : x))}>
+                        <option value="POST">POST</option>
+                        <option value="GET">GET</option>
+                      </select>
+                    </label>
+                    <label>Cabeçalhos extras (um por linha: Nome: valor)
+                      <textarea rows={2} value={a.headers || ""}
+                        onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, headers: e.target.value } : x))} />
+                    </label>
+                    <small style={{ opacity: 0.7 }}>O servidor Python precisa liberar CORS para este site.</small>
+                  </>
+                )}
+              </div>
+            ))}
+            <button className="btn-ghost" onClick={() => {
+              const a: AgentConfig = {
+                id: newAgentId(), name: `Agente ${agents.length + 1}`,
+                type: "supabase", url: "", key: "", functionName: "chat",
+              };
+              onAgentsChange([...agents, a]);
+              onActiveAgentChange(a.id);
+            }}>+ Adicionar agente</button>
+          </section>
+
+
+          <section className="settings-section">
             <h3>Conexão</h3>
             <label>Supabase URL
               <input value={draft.supabaseUrl} onChange={(e) => update("supabaseUrl", e.target.value)} />
