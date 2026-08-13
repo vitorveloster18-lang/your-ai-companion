@@ -6,23 +6,36 @@ import {
   DEFAULT_SETTINGS,
   saveSettings,
 } from "@/lib/settings";
+import {
+  type AgentConfig,
+  agentLabel,
+  newAgentId,
+} from "@/lib/agents";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   settings: AppSettings;
   onChange: (s: AppSettings) => void;
+  agents: AgentConfig[];
+  activeAgentId: string | null;
+  onAgentsChange: (list: AgentConfig[]) => void;
+  onActiveAgentChange: (id: string | null) => void;
 };
 
 const LANG_OPTIONS = ["pt-BR", "en-US", "es-ES", "fr-FR", "ja-JP"];
 
-export function SettingsPanel({ open, onClose, settings, onChange }: Props) {
+export function SettingsPanel({
+  open, onClose, settings, onChange,
+  agents, activeAgentId, onAgentsChange, onActiveAgentChange,
+}: Props) {
   const [draft, setDraft] = useState<AppSettings>(settings);
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testStatus, setTestStatus] = useState<"idle" | "ok" | "err" | "loading">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
 
   useEffect(() => { if (open) setDraft(settings); }, [open, settings]);
+
 
   useEffect(() => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
