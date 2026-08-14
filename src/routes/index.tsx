@@ -252,17 +252,21 @@ function AgentPage() {
       if (s.standbyDelay > 0) await new Promise((r) => setTimeout(r, s.standbyDelay * 1000));
       await playTransition("speaking_to_standby");
       setAgentState("standby");
+      setMood(null);
     } catch (e) {
       console.error(e);
       addBubble("Algo deu errado. Tente novamente.", "agent");
       await hideState();
       await playTransition("speaking_to_standby");
       setAgentState("standby");
+      setMood(null);
     }
   };
 
   const stopListening = () => {
     setIsRecording(false);
+    micDetachRef.current?.();
+    micDetachRef.current = null;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -274,12 +278,14 @@ function AgentPage() {
     if (!s.micEnabled) { alert("Microfone desativado nas configurações."); return; }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { alert("Seu navegador não suporta reconhecimento de voz. Use Chrome."); return; }
+    stopSpeech();
     const recognition = new SR();
     recognition.lang = s.voiceLang;
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onstart = async () => {
       setIsRecording(true);
+      attachMicLevel().then((detach) => { micDetachRef.current = detach; });
       await playTransition("standby_to_listening");
       showState("listening", true);
     };
@@ -293,6 +299,7 @@ function AgentPage() {
     recognitionRef.current = recognition;
     recognition.start();
   };
+
 
   const onInputFocus = async () => {
     if (agentState === "standby") {
