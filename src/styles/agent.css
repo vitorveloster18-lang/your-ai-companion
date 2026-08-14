@@ -945,3 +945,34 @@ body {
   display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
 }
 .vc-actions .btn-ghost { padding: 6px 10px; font-size: 11px; }
+
+/* ===== Orb abstrato ===== */
+.avatar-orb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
+/* ===== Cartões de agente nas configurações ===== */
+.agent-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: hsl(var(--muted) / 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.agent-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.agent-card textarea {
+  width: 100%;
+  resize: vertical;
+}

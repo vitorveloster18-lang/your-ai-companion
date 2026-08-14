@@ -4,6 +4,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import "../styles/agent.css";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AvatarStage, type AvatarStageHandle } from "@/components/AvatarStage";
+import { AvatarOrb } from "@/components/AvatarOrb";
 import {
   type AppSettings,
   type VideoKey,
@@ -12,6 +13,18 @@ import {
   detectEmotion,
   loadAvatarVideos,
 } from "@/lib/settings";
+import {
+  type AgentConfig,
+  loadAgents,
+  saveAgents,
+  loadActiveAgentId,
+  saveActiveAgentId,
+  sendToAgent,
+} from "@/lib/agents";
+import { appendHistory, buildContext } from "@/lib/memory";
+import { speak, stopSpeech } from "@/lib/tts";
+import { attachMicLevel } from "@/lib/audio-level";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -68,13 +81,37 @@ function AgentPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [sendPulse, setSendPulse] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
+  const [mood, setMood] = useState<VideoKey | null>(null);
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
+  const micDetachRef = useRef<(() => void) | null>(null);
   const stageRef = useRef<AvatarStageHandle>(null);
   const settingsRef = useRef(settings);
+  const agentsRef = useRef<AgentConfig[]>([]);
+  const activeAgentIdRef = useRef<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { agentsRef.current = agents; }, [agents]);
+  useEffect(() => { activeAgentIdRef.current = activeAgentId; }, [activeAgentId]);
+
+  // Load agents from local storage
+  useEffect(() => {
+    setAgents(loadAgents());
+    setActiveAgentId(loadActiveAgentId());
+  }, []);
+
+  const updateAgents = useCallback((list: AgentConfig[]) => {
+    setAgents(list);
+    saveAgents(list);
+  }, []);
+  const updateActiveAgent = useCallback((id: string | null) => {
+    setActiveAgentId(id);
+    saveActiveAgentId(id);
+  }, []);
+
 
   // Bubble cleanup
   useEffect(() => {
@@ -86,21 +123,34 @@ function AgentPage() {
     return () => timers.forEach(clearTimeout);
   }, [bubbles]);
 
-  // Stage helpers (promise-based wrappers around the imperative API)
+  // Stage helpers — no-op (resolved immediately) when the orb renderer is active
+  const isOrb = settings.renderMode === "orb";
+  const isOrbRef = useRef(isOrb);
+  useEffect(() => { isOrbRef.current = isOrb; }, [isOrb]);
+
   const playTransition = useCallback((key: VideoKey) => new Promise<void>((res) => {
     setAgentState(key);
-    stageRef.current?.playTransition(key, () => res());
+    if (isOrbRef.current || !stageRef.current) { res(); return; }
+    stageRef.current.playTransition(key, () => res());
   }), []);
   const showState = useCallback((key: VideoKey, loop = true) => {
     setAgentState(key);
+    if (isOrbRef.current) return;
     stageRef.current?.showState(key, loop);
   }, []);
   const hideState = useCallback(() => new Promise<void>((res) => {
-    stageRef.current?.hideState(() => res());
+    if (isOrbRef.current || !stageRef.current) { res(); return; }
+    stageRef.current.hideState(() => res());
   }), []);
   const playEmotion = useCallback((key: VideoKey) => new Promise<void>((res) => {
-    stageRef.current?.playEmotion(key, () => res());
+    setMood(key);
+    if (isOrbRef.current || !stageRef.current) {
+      setTimeout(() => res(), settingsRef.current.emotionDuration * 1000);
+      return;
+    }
+    stageRef.current.playEmotion(key, () => res());
   }), []);
+
 
   // Load videos from cloud and run enter sequence
   useEffect(() => {
@@ -133,22 +183,7 @@ function AgentPage() {
     setBubbles((prev) => [...prev, { id: Date.now() + Math.random(), text, role, ts: Date.now() }]);
   };
 
-  const speakText = (text: string) =>
-    new Promise<void>((resolve) => {
-      const s = settingsRef.current;
-      if (!s.voiceEnabled || !("speechSynthesis" in window)) { resolve(); return; }
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = s.voiceLang;
-      u.rate = s.speechRate;
-      u.pitch = s.speechPitch;
-      const voices = window.speechSynthesis.getVoices();
-      const chosen = voices.find((v) => v.name === s.voiceName);
-      if (chosen) u.voice = chosen;
-      u.onend = () => resolve();
-      u.onerror = () => resolve();
-      window.speechSynthesis.speak(u);
-    });
+  const speakText = (text: string) => speak(text, settingsRef.current);
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -157,6 +192,11 @@ function AgentPage() {
     setTimeout(() => setSendPulse(false), 300);
     addBubble(text, "user");
     setInput("");
+    setMood(null);
+
+    const agent = agentsRef.current.find((a) => a.id === activeAgentIdRef.current) || null;
+    const memoryId = agent?.id || "default";
+    appendHistory(memoryId, { role: "user", text, ts: Date.now() });
 
     // user stops talking → listening_to_standby → thinking
     await hideState();
@@ -164,17 +204,30 @@ function AgentPage() {
     showState("thinking", true);
 
     try {
-      const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.supabaseKey}` },
-        body: JSON.stringify({ message: text, session_id: s.sessionId }),
-      });
-      if (!response.ok) throw new Error("Erro na API");
-      const data = await response.json();
-      const replyText = data.response || data.text || data.reply || "";
-      const apiEmotion: VideoKey | undefined = data.emotion;
+      let replyText = "";
+      let apiEmotion: VideoKey | undefined;
+      const context = buildContext(memoryId);
+      const payloadText = context ? `${context}\n\nMensagem atual: ${text}` : text;
+
+      if (agent) {
+        const reply = await sendToAgent(agent, payloadText, s.sessionId);
+        replyText = reply.text;
+        apiEmotion = reply.emotion as VideoKey | undefined;
+      } else {
+        const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.supabaseKey}` },
+          body: JSON.stringify({ message: payloadText, session_id: s.sessionId }),
+        });
+        if (!response.ok) throw new Error("Erro na API");
+        const data = await response.json();
+        replyText = data.response || data.text || data.reply || "";
+        apiEmotion = data.emotion;
+      }
       addBubble(replyText, "agent");
+      appendHistory(memoryId, { role: "agent", text: replyText, ts: Date.now() });
+
 
       if (s.thinkingDelay > 0) await new Promise((r) => setTimeout(r, s.thinkingDelay * 1000));
 
@@ -199,17 +252,21 @@ function AgentPage() {
       if (s.standbyDelay > 0) await new Promise((r) => setTimeout(r, s.standbyDelay * 1000));
       await playTransition("speaking_to_standby");
       setAgentState("standby");
+      setMood(null);
     } catch (e) {
       console.error(e);
       addBubble("Algo deu errado. Tente novamente.", "agent");
       await hideState();
       await playTransition("speaking_to_standby");
       setAgentState("standby");
+      setMood(null);
     }
   };
 
   const stopListening = () => {
     setIsRecording(false);
+    micDetachRef.current?.();
+    micDetachRef.current = null;
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -221,12 +278,14 @@ function AgentPage() {
     if (!s.micEnabled) { alert("Microfone desativado nas configurações."); return; }
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { alert("Seu navegador não suporta reconhecimento de voz. Use Chrome."); return; }
+    stopSpeech();
     const recognition = new SR();
     recognition.lang = s.voiceLang;
     recognition.interimResults = false;
     recognition.continuous = false;
     recognition.onstart = async () => {
       setIsRecording(true);
+      attachMicLevel().then((detach) => { micDetachRef.current = detach; });
       await playTransition("standby_to_listening");
       showState("listening", true);
     };
@@ -240,6 +299,7 @@ function AgentPage() {
     recognitionRef.current = recognition;
     recognition.start();
   };
+
 
   const onInputFocus = async () => {
     if (agentState === "standby") {
@@ -268,17 +328,23 @@ function AgentPage() {
 
   return (
     <div className={`stage-shell ${fadeOut ? "fading" : ""}`}>
-      <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
-
-      {mounted && !hasStandby && (
-        <div className="stage-placeholder-wrap">
-          <div className="stage-placeholder">
-            <div className="placeholder-pulse" />
-            <div className="placeholder-label">{STATUS_LABELS[agentState] || agentState}</div>
-            <small>Carregue os vídeos no Avatar Creator</small>
-          </div>
-        </div>
+      {isOrb ? (
+        <AvatarOrb state={agentState} mood={mood} />
+      ) : (
+        <>
+          <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
+          {mounted && !hasStandby && (
+            <div className="stage-placeholder-wrap">
+              <div className="stage-placeholder">
+                <div className="placeholder-pulse" />
+                <div className="placeholder-label">{STATUS_LABELS[agentState] || agentState}</div>
+                <small>Carregue os vídeos no Avatar Creator</small>
+              </div>
+            </div>
+          )}
+        </>
       )}
+
 
       <button
         className="settings-trigger floating"
@@ -354,7 +420,12 @@ function AgentPage() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onChange={setSettings}
+        agents={agents}
+        activeAgentId={activeAgentId}
+        onAgentsChange={updateAgents}
+        onActiveAgentChange={updateActiveAgent}
       />
+
     </div>
   );
 }

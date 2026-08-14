@@ -11,6 +11,14 @@ import {
   agentLabel,
   newAgentId,
 } from "@/lib/agents";
+import {
+  clearHistory,
+  getMemoryLimit,
+  loadFacts,
+  saveFacts,
+  setMemoryLimit,
+} from "@/lib/memory";
+
 
 type Props = {
   open: boolean;
@@ -33,6 +41,15 @@ export function SettingsPanel({
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testStatus, setTestStatus] = useState<"idle" | "ok" | "err" | "loading">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [memLimit, setMemLimit] = useState(20);
+  const [factsText, setFactsText] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setMemLimit(getMemoryLimit());
+    setFactsText(loadFacts().join("\n"));
+  }, [open]);
+
 
   useEffect(() => { if (open) setDraft(settings); }, [open, settings]);
 
@@ -201,6 +218,29 @@ export function SettingsPanel({
             }}>+ Adicionar agente</button>
           </section>
 
+          <section className="settings-section">
+            <h3>Memória (local)</h3>
+            <label>Mensagens lembradas ({memLimit})
+              <input type="range" min={0} max={60} step={2} value={memLimit}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  setMemLimit(n);
+                  setMemoryLimit(n);
+                }} />
+            </label>
+            <label>Fatos lembrados (um por linha)
+              <textarea rows={4} value={factsText}
+                onChange={(e) => setFactsText(e.target.value)}
+                onBlur={() => saveFacts(factsText.split("\n").map((f) => f.trim()).filter(Boolean))}
+                placeholder="Meu nome é..." />
+            </label>
+            <button className="btn-ghost" onClick={() => {
+              clearHistory(activeAgentId || "default");
+              toast.success("Histórico local apagado");
+            }}>Limpar histórico</button>
+            <small style={{ opacity: 0.7 }}>Tudo fica só neste navegador, sem backend.</small>
+          </section>
+
 
           <section className="settings-section">
             <h3>Conexão</h3>
@@ -277,6 +317,33 @@ export function SettingsPanel({
 
           <section className="settings-section">
             <h3>Voz</h3>
+            <label>Provedor
+              <select value={draft.ttsProvider}
+                onChange={(e) => update("ttsProvider", e.target.value as AppSettings["ttsProvider"])}>
+                <option value="webspeech">Navegador (grátis, offline)</option>
+                <option value="kokoro">Kokoro (API compatível OpenAI)</option>
+              </select>
+            </label>
+            {draft.ttsProvider === "kokoro" && (
+              <>
+                <label>Kokoro endpoint
+                  <input value={draft.kokoroUrl} placeholder="http://localhost:8880/v1/audio/speech"
+                    onChange={(e) => update("kokoroUrl", e.target.value)} />
+                </label>
+                <label>Chave (opcional)
+                  <input value={draft.kokoroKey} onChange={(e) => update("kokoroKey", e.target.value)} />
+                </label>
+                <label>Modelo
+                  <input value={draft.kokoroModel} onChange={(e) => update("kokoroModel", e.target.value)} />
+                </label>
+                <label>Voz Kokoro
+                  <input value={draft.kokoroVoice} placeholder="af_heart"
+                    onChange={(e) => update("kokoroVoice", e.target.value)} />
+                </label>
+                <small style={{ opacity: 0.7 }}>Se falhar, a voz do navegador é usada automaticamente.</small>
+              </>
+            )}
+
             <label className="toggle-row">
               <span>Saída de voz</span>
               <input type="checkbox" checked={draft.voiceEnabled}
