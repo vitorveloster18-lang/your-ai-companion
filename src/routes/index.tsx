@@ -81,13 +81,37 @@ function AgentPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [sendPulse, setSendPulse] = useState(false);
   const [fadeOut, setFadeOut] = useState(false);
+  const [mood, setMood] = useState<VideoKey | null>(null);
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
+  const micDetachRef = useRef<(() => void) | null>(null);
   const stageRef = useRef<AvatarStageHandle>(null);
   const settingsRef = useRef(settings);
+  const agentsRef = useRef<AgentConfig[]>([]);
+  const activeAgentIdRef = useRef<string | null>(null);
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { settingsRef.current = settings; }, [settings]);
+  useEffect(() => { agentsRef.current = agents; }, [agents]);
+  useEffect(() => { activeAgentIdRef.current = activeAgentId; }, [activeAgentId]);
+
+  // Load agents from local storage
+  useEffect(() => {
+    setAgents(loadAgents());
+    setActiveAgentId(loadActiveAgentId());
+  }, []);
+
+  const updateAgents = useCallback((list: AgentConfig[]) => {
+    setAgents(list);
+    saveAgents(list);
+  }, []);
+  const updateActiveAgent = useCallback((id: string | null) => {
+    setActiveAgentId(id);
+    saveActiveAgentId(id);
+  }, []);
+
 
   // Bubble cleanup
   useEffect(() => {
