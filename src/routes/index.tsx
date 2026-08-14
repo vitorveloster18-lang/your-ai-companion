@@ -328,17 +328,23 @@ function AgentPage() {
 
   return (
     <div className={`stage-shell ${fadeOut ? "fading" : ""}`}>
-      <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
-
-      {mounted && !hasStandby && (
-        <div className="stage-placeholder-wrap">
-          <div className="stage-placeholder">
-            <div className="placeholder-pulse" />
-            <div className="placeholder-label">{STATUS_LABELS[agentState] || agentState}</div>
-            <small>Carregue os vídeos no Avatar Creator</small>
-          </div>
-        </div>
+      {isOrb ? (
+        <AvatarOrb state={agentState} mood={mood} />
+      ) : (
+        <>
+          <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />
+          {mounted && !hasStandby && (
+            <div className="stage-placeholder-wrap">
+              <div className="stage-placeholder">
+                <div className="placeholder-pulse" />
+                <div className="placeholder-label">{STATUS_LABELS[agentState] || agentState}</div>
+                <small>Carregue os vídeos no Avatar Creator</small>
+              </div>
+            </div>
+          )}
+        </>
       )}
+
 
       <button
         className="settings-trigger floating"
