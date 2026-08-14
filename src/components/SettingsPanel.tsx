@@ -201,6 +201,29 @@ export function SettingsPanel({
             }}>+ Adicionar agente</button>
           </section>
 
+          <section className="settings-section">
+            <h3>Memória (local)</h3>
+            <label>Mensagens lembradas ({memLimit})
+              <input type="range" min={0} max={60} step={2} value={memLimit}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  setMemLimit(n);
+                  setMemoryLimit(n);
+                }} />
+            </label>
+            <label>Fatos lembrados (um por linha)
+              <textarea rows={4} value={factsText}
+                onChange={(e) => setFactsText(e.target.value)}
+                onBlur={() => saveFacts(factsText.split("\n").map((f) => f.trim()).filter(Boolean))}
+                placeholder="Meu nome é..." />
+            </label>
+            <button className="btn-ghost" onClick={() => {
+              clearHistory(activeAgentId || "default");
+              toast.success("Histórico local apagado");
+            }}>Limpar histórico</button>
+            <small style={{ opacity: 0.7 }}>Tudo fica só neste navegador, sem backend.</small>
+          </section>
+
 
           <section className="settings-section">
             <h3>Conexão</h3>
