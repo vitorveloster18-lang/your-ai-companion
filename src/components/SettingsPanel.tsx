@@ -11,6 +11,14 @@ import {
   agentLabel,
   newAgentId,
 } from "@/lib/agents";
+import {
+  clearHistory,
+  getMemoryLimit,
+  loadFacts,
+  saveFacts,
+  setMemoryLimit,
+} from "@/lib/memory";
+
 
 type Props = {
   open: boolean;
