@@ -4,6 +4,7 @@ import { Settings as SettingsIcon } from "lucide-react";
 import "../styles/agent.css";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AvatarStage, type AvatarStageHandle } from "@/components/AvatarStage";
+import { AvatarOrb } from "@/components/AvatarOrb";
 import {
   type AppSettings,
   type VideoKey,
@@ -12,6 +13,18 @@ import {
   detectEmotion,
   loadAvatarVideos,
 } from "@/lib/settings";
+import {
+  type AgentConfig,
+  loadAgents,
+  saveAgents,
+  loadActiveAgentId,
+  saveActiveAgentId,
+  sendToAgent,
+} from "@/lib/agents";
+import { appendHistory, buildContext } from "@/lib/memory";
+import { speak, stopSpeech } from "@/lib/tts";
+import { attachMicLevel } from "@/lib/audio-level";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
