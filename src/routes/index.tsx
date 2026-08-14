@@ -132,12 +132,34 @@ function AgentPage() {
     setAgentState(key);
     stageRef.current?.showState(key, loop);
   }, []);
+  // Stage helpers — no-op (resolved immediately) when the orb renderer is active
+  const isOrb = settings.renderMode === "orb";
+  const isOrbRef = useRef(isOrb);
+  useEffect(() => { isOrbRef.current = isOrb; }, [isOrb]);
+
+  const playTransition = useCallback((key: VideoKey) => new Promise<void>((res) => {
+    setAgentState(key);
+    if (isOrbRef.current || !stageRef.current) { res(); return; }
+    stageRef.current.playTransition(key, () => res());
+  }), []);
+  const showState = useCallback((key: VideoKey, loop = true) => {
+    setAgentState(key);
+    if (isOrbRef.current) return;
+    stageRef.current?.showState(key, loop);
+  }, []);
   const hideState = useCallback(() => new Promise<void>((res) => {
-    stageRef.current?.hideState(() => res());
+    if (isOrbRef.current || !stageRef.current) { res(); return; }
+    stageRef.current.hideState(() => res());
   }), []);
   const playEmotion = useCallback((key: VideoKey) => new Promise<void>((res) => {
-    stageRef.current?.playEmotion(key, () => res());
+    setMood(key);
+    if (isOrbRef.current || !stageRef.current) {
+      setTimeout(() => res(), settingsRef.current.emotionDuration * 1000);
+      return;
+    }
+    stageRef.current.playEmotion(key, () => res());
   }), []);
+
 
   // Load videos from cloud and run enter sequence
   useEffect(() => {
