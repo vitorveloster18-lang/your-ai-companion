@@ -277,6 +277,33 @@ export function SettingsPanel({
 
           <section className="settings-section">
             <h3>Voz</h3>
+            <label>Provedor
+              <select value={draft.ttsProvider}
+                onChange={(e) => update("ttsProvider", e.target.value as AppSettings["ttsProvider"])}>
+                <option value="webspeech">Navegador (grátis, offline)</option>
+                <option value="kokoro">Kokoro (API compatível OpenAI)</option>
+              </select>
+            </label>
+            {draft.ttsProvider === "kokoro" && (
+              <>
+                <label>Kokoro endpoint
+                  <input value={draft.kokoroUrl} placeholder="http://localhost:8880/v1/audio/speech"
+                    onChange={(e) => update("kokoroUrl", e.target.value)} />
+                </label>
+                <label>Chave (opcional)
+                  <input value={draft.kokoroKey} onChange={(e) => update("kokoroKey", e.target.value)} />
+                </label>
+                <label>Modelo
+                  <input value={draft.kokoroModel} onChange={(e) => update("kokoroModel", e.target.value)} />
+                </label>
+                <label>Voz Kokoro
+                  <input value={draft.kokoroVoice} placeholder="af_heart"
+                    onChange={(e) => update("kokoroVoice", e.target.value)} />
+                </label>
+                <small style={{ opacity: 0.7 }}>Se falhar, a voz do navegador é usada automaticamente.</small>
+              </>
+            )}
+
             <label className="toggle-row">
               <span>Saída de voz</span>
               <input type="checkbox" checked={draft.voiceEnabled}
