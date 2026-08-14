@@ -183,22 +183,7 @@ function AgentPage() {
     setBubbles((prev) => [...prev, { id: Date.now() + Math.random(), text, role, ts: Date.now() }]);
   };
 
-  const speakText = (text: string) =>
-    new Promise<void>((resolve) => {
-      const s = settingsRef.current;
-      if (!s.voiceEnabled || !("speechSynthesis" in window)) { resolve(); return; }
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = s.voiceLang;
-      u.rate = s.speechRate;
-      u.pitch = s.speechPitch;
-      const voices = window.speechSynthesis.getVoices();
-      const chosen = voices.find((v) => v.name === s.voiceName);
-      if (chosen) u.voice = chosen;
-      u.onend = () => resolve();
-      u.onerror = () => resolve();
-      window.speechSynthesis.speak(u);
-    });
+  const speakText = (text: string) => speak(text, settingsRef.current);
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -207,6 +192,11 @@ function AgentPage() {
     setTimeout(() => setSendPulse(false), 300);
     addBubble(text, "user");
     setInput("");
+    setMood(null);
+
+    const agent = agentsRef.current.find((a) => a.id === activeAgentIdRef.current) || null;
+    const memoryId = agent?.id || "default";
+    appendHistory(memoryId, { role: "user", text, ts: Date.now() });
 
     // user stops talking → listening_to_standby → thinking
     await hideState();
@@ -214,17 +204,30 @@ function AgentPage() {
     showState("thinking", true);
 
     try {
-      const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.supabaseKey}` },
-        body: JSON.stringify({ message: text, session_id: s.sessionId }),
-      });
-      if (!response.ok) throw new Error("Erro na API");
-      const data = await response.json();
-      const replyText = data.response || data.text || data.reply || "";
-      const apiEmotion: VideoKey | undefined = data.emotion;
+      let replyText = "";
+      let apiEmotion: VideoKey | undefined;
+      const context = buildContext(memoryId);
+      const payloadText = context ? `${context}\n\nMensagem atual: ${text}` : text;
+
+      if (agent) {
+        const reply = await sendToAgent(agent, payloadText, s.sessionId);
+        replyText = reply.text;
+        apiEmotion = reply.emotion as VideoKey | undefined;
+      } else {
+        const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.supabaseKey}` },
+          body: JSON.stringify({ message: payloadText, session_id: s.sessionId }),
+        });
+        if (!response.ok) throw new Error("Erro na API");
+        const data = await response.json();
+        replyText = data.response || data.text || data.reply || "";
+        apiEmotion = data.emotion;
+      }
       addBubble(replyText, "agent");
+      appendHistory(memoryId, { role: "agent", text: replyText, ts: Date.now() });
+
 
       if (s.thinkingDelay > 0) await new Promise((r) => setTimeout(r, s.thinkingDelay * 1000));
 
