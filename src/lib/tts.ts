@@ -99,6 +99,14 @@ async function speakKokoro(text: string, s: AppSettings): Promise<void> {
 /** Speaks text with the configured provider, falling back to Web Speech. */
 export async function speak(text: string, s: AppSettings): Promise<void> {
   if (!s.voiceEnabled || !text.trim()) return;
+  if (s.ttsProvider === "kokoro-local") {
+    try {
+      await speakKokoroLocal(text, s);
+      return;
+    } catch (e) {
+      console.warn("Kokoro local falhou, usando voz do navegador", e);
+    }
+  }
   if (s.ttsProvider === "kokoro") {
     try {
       await speakKokoro(text, s);
