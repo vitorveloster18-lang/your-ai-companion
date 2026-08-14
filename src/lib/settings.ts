@@ -197,7 +197,7 @@ export type AppSettings = {
   renderMode: "orb" | "video";
 
   // Voz — provedor
-  ttsProvider: "webspeech" | "kokoro";
+  ttsProvider: "webspeech" | "kokoro-local" | "kokoro";
   kokoroUrl: string;
   kokoroKey: string;
   kokoroModel: string;
