@@ -41,6 +41,15 @@ export function SettingsPanel({
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [testStatus, setTestStatus] = useState<"idle" | "ok" | "err" | "loading">("idle");
   const [creatorOpen, setCreatorOpen] = useState(false);
+  const [memLimit, setMemLimit] = useState(20);
+  const [factsText, setFactsText] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setMemLimit(getMemoryLimit());
+    setFactsText(loadFacts().join("\n"));
+  }, [open]);
+
 
   useEffect(() => { if (open) setDraft(settings); }, [open, settings]);
 
