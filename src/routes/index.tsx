@@ -123,15 +123,6 @@ function AgentPage() {
     return () => timers.forEach(clearTimeout);
   }, [bubbles]);
 
-  // Stage helpers (promise-based wrappers around the imperative API)
-  const playTransition = useCallback((key: VideoKey) => new Promise<void>((res) => {
-    setAgentState(key);
-    stageRef.current?.playTransition(key, () => res());
-  }), []);
-  const showState = useCallback((key: VideoKey, loop = true) => {
-    setAgentState(key);
-    stageRef.current?.showState(key, loop);
-  }, []);
   // Stage helpers — no-op (resolved immediately) when the orb renderer is active
   const isOrb = settings.renderMode === "orb";
   const isOrbRef = useRef(isOrb);
