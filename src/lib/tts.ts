@@ -33,6 +33,31 @@ function speakWebSpeech(text: string, s: AppSettings): Promise<void> {
   });
 }
 
+async function playUrl(url: string, revoke: boolean): Promise<void> {
+  const audio = new Audio(url);
+  audio.crossOrigin = "anonymous";
+  currentAudio = audio;
+  detach = attachElementLevel(audio);
+  await audio.play();
+  await new Promise<void>((resolve) => {
+    const done = () => {
+      detach?.();
+      detach = null;
+      currentAudio = null;
+      if (revoke) URL.revokeObjectURL(url);
+      resolve();
+    };
+    audio.onended = done;
+    audio.onerror = done;
+  });
+}
+
+async function speakKokoroLocal(text: string, s: AppSettings): Promise<void> {
+  const { synthLocalKokoro } = await import("./kokoro-local");
+  const url = await synthLocalKokoro(text, s.kokoroVoice, s.speechRate);
+  await playUrl(url, true);
+}
+
 async function speakKokoro(text: string, s: AppSettings): Promise<void> {
   const base = (s.kokoroUrl || "").replace(/\/$/, "");
   if (!base) throw new Error("Kokoro URL vazia");
