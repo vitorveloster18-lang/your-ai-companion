@@ -420,7 +420,12 @@ function AgentPage() {
         onClose={() => setSettingsOpen(false)}
         settings={settings}
         onChange={setSettings}
+        agents={agents}
+        activeAgentId={activeAgentId}
+        onAgentsChange={updateAgents}
+        onActiveAgentChange={updateActiveAgent}
       />
+
     </div>
   );
 }
