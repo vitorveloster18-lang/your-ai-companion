@@ -11,6 +11,7 @@ import {
   agentLabel,
   newAgentId,
 } from "@/lib/agents";
+import { KOKORO_LOCAL_VOICES } from "@/lib/kokoro-local";
 import {
   clearHistory,
   getMemoryLimit,
@@ -43,6 +44,7 @@ export function SettingsPanel({
   const [creatorOpen, setCreatorOpen] = useState(false);
   const [memLimit, setMemLimit] = useState(20);
   const [factsText, setFactsText] = useState("");
+  const [kokoroStatus, setKokoroStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
 
   useEffect(() => {
     if (!open) return;
