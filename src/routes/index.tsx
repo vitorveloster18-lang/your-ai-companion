@@ -327,9 +327,21 @@ function AgentPage() {
   const hasStandby = !!settings.videoData["standby"];
 
   return (
-    <div className={`stage-shell ${fadeOut ? "fading" : ""}`}>
+    <div className={`stage-shell ${fadeOut ? "fading" : ""} ${isOrb ? "orb-mode" : ""}`}>
       {isOrb ? (
-        <AvatarOrb state={agentState} mood={mood} />
+        <>
+          <div
+            className={`stage-bg ${settings.orbBackground}`}
+            style={
+              settings.orbBackground === "image" && settings.orbBackgroundImage
+                ? { backgroundImage: `url(${settings.orbBackgroundImage})` }
+                : undefined
+            }
+          >
+            <div className="bg-vignette" />
+          </div>
+          <AvatarOrb state={agentState} mood={mood} intensity={settings.orbIntensity} />
+        </>
       ) : (
         <>
           <AvatarStage ref={stageRef} settings={settings} onStateChange={setAgentState} />

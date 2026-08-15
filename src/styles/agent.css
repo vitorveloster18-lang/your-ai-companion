@@ -1056,3 +1056,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .stage-bg::before { animation: none; }
 }
+
+.stage-shell.orb-mode { background: transparent; }
+.stage-shell.orb-mode .stage-bg { position: absolute; z-index: 0; }
+.stage-shell.orb-mode .avatar-orb { z-index: 1; }
