@@ -195,6 +195,9 @@ export type AppSettings = {
 
   // Aparência: orb abstrato ou palco de vídeo
   renderMode: "orb" | "video";
+  orbBackground: "aurora" | "nebula" | "deep" | "grid" | "sunset" | "light" | "image";
+  orbBackgroundImage: string;
+  orbIntensity: number;
 
   // Voz — provedor
   ttsProvider: "webspeech" | "kokoro-local" | "kokoro";
@@ -253,6 +256,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   stateDurations: { ...DEFAULT_STATE_DURATIONS },
 
   renderMode: "orb",
+  orbBackground: "aurora",
+  orbBackgroundImage: "",
+  orbIntensity: 1,
   ttsProvider: "webspeech",
   kokoroUrl: "",
   kokoroKey: "",
