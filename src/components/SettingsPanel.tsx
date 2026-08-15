@@ -145,6 +145,33 @@ export function SettingsPanel({
             <small style={{ opacity: 0.7 }}>
               O orb reage ao áudio em tempo real e muda de cor conforme o humor da resposta.
             </small>
+
+            {draft.renderMode === "orb" && (
+              <>
+                <label>Fundo de tela
+                  <select value={draft.orbBackground}
+                    onChange={(e) => update("orbBackground", e.target.value as AppSettings["orbBackground"])}>
+                    <option value="aurora">Aurora (roxo/ciano)</option>
+                    <option value="nebula">Nebulosa</option>
+                    <option value="deep">Espaço profundo</option>
+                    <option value="grid">Grade neon</option>
+                    <option value="sunset">Pôr do sol</option>
+                    <option value="light">Claro minimalista</option>
+                    <option value="image">Imagem personalizada</option>
+                  </select>
+                </label>
+                {draft.orbBackground === "image" && (
+                  <label>URL da imagem
+                    <input value={draft.orbBackgroundImage} placeholder="https://..."
+                      onChange={(e) => update("orbBackgroundImage", e.target.value)} />
+                  </label>
+                )}
+                <label>Intensidade dos efeitos: {draft.orbIntensity.toFixed(1)}x
+                  <input type="range" min={0.3} max={2} step={0.1} value={draft.orbIntensity}
+                    onChange={(e) => update("orbIntensity", parseFloat(e.target.value))} />
+                </label>
+              </>
+            )}
           </section>
 
           <section className="settings-section">
