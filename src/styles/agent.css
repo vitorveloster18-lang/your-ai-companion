@@ -976,3 +976,87 @@ body {
   width: 100%;
   resize: vertical;
 }
+
+/* ===== Fundos de tela (stage backgrounds) ===== */
+.stage-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background-size: cover;
+  background-position: center;
+}
+.stage-bg::before,
+.stage-bg::after {
+  content: "";
+  position: absolute;
+  inset: -25%;
+  pointer-events: none;
+}
+.stage-bg.aurora {
+  background: radial-gradient(120% 90% at 50% 110%, #1b1440 0%, #0a0a1c 55%, #050510 100%);
+}
+.stage-bg.aurora::before {
+  background:
+    radial-gradient(40% 35% at 25% 30%, rgba(120,90,255,0.45), transparent 70%),
+    radial-gradient(45% 40% at 75% 25%, rgba(0,200,255,0.32), transparent 70%),
+    radial-gradient(50% 45% at 55% 80%, rgba(255,90,180,0.28), transparent 70%);
+  filter: blur(40px);
+  animation: bgDrift 26s ease-in-out infinite alternate;
+}
+.stage-bg.nebula {
+  background: radial-gradient(120% 100% at 30% 20%, #241033 0%, #0d0618 60%, #05030c 100%);
+}
+.stage-bg.nebula::before {
+  background:
+    radial-gradient(35% 30% at 70% 60%, rgba(255,120,90,0.35), transparent 70%),
+    radial-gradient(45% 40% at 25% 70%, rgba(150,60,255,0.4), transparent 70%),
+    radial-gradient(30% 30% at 60% 20%, rgba(90,200,255,0.3), transparent 70%);
+  filter: blur(50px);
+  animation: bgDrift 34s ease-in-out infinite alternate-reverse;
+}
+.stage-bg.deep { background: radial-gradient(90% 80% at 50% 50%, #0b0f1e 0%, #05060d 70%, #000 100%); }
+.stage-bg.sunset {
+  background: linear-gradient(180deg, #2a1145 0%, #6b2352 45%, #c2543f 80%, #f0a35e 100%);
+}
+.stage-bg.sunset::before {
+  background: radial-gradient(45% 35% at 50% 85%, rgba(255,200,120,0.5), transparent 70%);
+  filter: blur(40px);
+  animation: bgDrift 30s ease-in-out infinite alternate;
+}
+.stage-bg.light { background: linear-gradient(160deg, #f4f5ff 0%, #eaf1ff 50%, #f6ecff 100%); }
+.stage-bg.grid { background: #06070f; }
+.stage-bg.grid::before {
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(120,140,255,0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120,140,255,0.16) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(70% 60% at 50% 50%, #000 20%, transparent 85%);
+  -webkit-mask-image: radial-gradient(70% 60% at 50% 50%, #000 20%, transparent 85%);
+  animation: gridPan 18s linear infinite;
+}
+.stage-bg.image::after {
+  inset: 0;
+  background: radial-gradient(80% 70% at 50% 50%, rgba(0,0,0,0.15), rgba(0,0,0,0.6));
+}
+.stage-bg .bg-vignette {
+  position: absolute; inset: 0;
+  background: radial-gradient(75% 65% at 50% 50%, transparent 40%, rgba(0,0,0,0.45) 100%);
+}
+@keyframes bgDrift {
+  0%   { transform: translate3d(-3%, -2%, 0) scale(1.05) rotate(0deg); }
+  50%  { transform: translate3d(3%, 2%, 0) scale(1.15) rotate(6deg); }
+  100% { transform: translate3d(-2%, 3%, 0) scale(1.08) rotate(-4deg); }
+}
+@keyframes gridPan {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 46px 46px, 46px 46px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage-bg::before { animation: none; }
+}
+
+.stage-shell.orb-mode { background: transparent; }
+.stage-shell.orb-mode .stage-bg { position: absolute; z-index: 0; }
+.stage-shell.orb-mode .avatar-orb { z-index: 1; }
