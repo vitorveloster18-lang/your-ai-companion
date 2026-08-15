@@ -321,9 +321,40 @@ export function SettingsPanel({
               <select value={draft.ttsProvider}
                 onChange={(e) => update("ttsProvider", e.target.value as AppSettings["ttsProvider"])}>
                 <option value="webspeech">Navegador (grátis, offline)</option>
+                <option value="kokoro-local">Kokoro no navegador (sem API)</option>
                 <option value="kokoro">Kokoro (API compatível OpenAI)</option>
               </select>
             </label>
+            {draft.ttsProvider === "kokoro-local" && (
+              <>
+                <label>Voz Kokoro
+                  <select value={draft.kokoroVoice}
+                    onChange={(e) => update("kokoroVoice", e.target.value)}>
+                    {KOKORO_LOCAL_VOICES.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                <button className="btn-ghost" onClick={async () => {
+                  setKokoroStatus("loading");
+                  try {
+                    const { getLocalKokoro } = await import("@/lib/kokoro-local");
+                    await getLocalKokoro();
+                    setKokoroStatus("ok");
+                    toast.success("Modelo Kokoro pronto (fica em cache no navegador)");
+                  } catch (e) {
+                    console.error(e);
+                    setKokoroStatus("err");
+                    toast.error("Não foi possível carregar o Kokoro local");
+                  }
+                }}>
+                  {kokoroStatus === "loading" ? "Baixando modelo…" : kokoroStatus === "ok" ? "Modelo pronto ✓" : "Baixar modelo (~90 MB, uma vez)"}
+                </button>
+                <small style={{ opacity: 0.7 }}>
+                  Roda 100% no seu dispositivo (WebGPU quando disponível). A primeira fala
+                  baixa o modelo; depois funciona offline. Se falhar, usa a voz do navegador.
+                </small>
+              </>
+            )}
+
             {draft.ttsProvider === "kokoro" && (
               <>
                 <label>Kokoro endpoint
