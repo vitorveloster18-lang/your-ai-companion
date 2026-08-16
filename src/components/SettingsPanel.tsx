@@ -215,6 +215,11 @@ export function SettingsPanel({
                       : "http://localhost:8000/chat"}
                     onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, url: e.target.value } : x))} />
                 </label>
+                <label>Agent ID (se a sua função exigir)
+                  <input value={a.agentId || ""} placeholder="uuid do agente"
+                    onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, agentId: e.target.value } : x))} />
+                </label>
+
                 {a.type === "supabase" ? (
                   <>
                     <label>Anon Key (opcional se a função for pública)
