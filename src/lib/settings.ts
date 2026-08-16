@@ -146,6 +146,8 @@ export type AppSettings = {
   supabaseUrl: string;
   supabaseKey: string;
   functionName: string;
+  /** Enviado como agent_id (algumas funções exigem). */
+  agentId: string;
   sessionId: string;
 
   // Videos — value can be a single URL or an array of variant URLs (cycled to avoid loop seams)
@@ -218,6 +220,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   supabaseUrl: "https://SEU-PROJETO.supabase.co",
   supabaseKey: "SUA-CHAVE-ANON",
   functionName: "chat",
+  agentId: "",
   sessionId: makeSessionId(),
 
   videoData: {},
