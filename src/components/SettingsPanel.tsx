@@ -10,7 +10,9 @@ import {
   type AgentConfig,
   agentLabel,
   newAgentId,
+  testAgent,
 } from "@/lib/agents";
+
 import { KOKORO_LOCAL_VOICES } from "@/lib/kokoro-local";
 import {
   clearHistory,
