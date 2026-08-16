@@ -215,12 +215,24 @@ function AgentPage() {
         apiEmotion = reply.emotion as VideoKey | undefined;
       } else {
         const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
+        const aid = (s.agentId || "").trim();
+        const body: Record<string, unknown> = { message: payloadText, session_id: s.sessionId };
+        if (aid) { body.agent_id = aid; body.agentId = aid; }
         const response = await fetch(url, {
           method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${s.supabaseKey}` },
-          body: JSON.stringify({ message: payloadText, session_id: s.sessionId }),
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${s.supabaseKey}`,
+            apikey: s.supabaseKey,
+          },
+          body: JSON.stringify(body),
         });
-        if (!response.ok) throw new Error("Erro na API");
+        if (!response.ok) {
+          const t = await response.text().catch(() => "");
+          throw new Error(/agent_id/i.test(t)
+            ? "Sua função exige um Agent ID. Preencha o campo Agent ID em Configurações › Conexão."
+            : `Erro na API (${response.status})`);
+        }
         const data = await response.json();
         replyText = data.response || data.text || data.reply || "";
         apiEmotion = data.emotion;

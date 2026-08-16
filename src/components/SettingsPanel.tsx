@@ -75,18 +75,30 @@ export function SettingsPanel({
     setTestStatus("loading");
     try {
       const url = `${draft.supabaseUrl}/functions/v1/${draft.functionName}`;
+      const agentId = (draft.agentId || "").trim();
+      const body: Record<string, unknown> = { message: "hello", session_id: draft.sessionId };
+      if (agentId) { body.agent_id = agentId; body.agentId = agentId; }
       const r = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${draft.supabaseKey}` },
-        body: JSON.stringify({ message: "hello", session_id: draft.sessionId }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${draft.supabaseKey}`,
+          apikey: draft.supabaseKey,
+        },
+        body: JSON.stringify(body),
       });
-      if (!r.ok) throw new Error(`${r.status}`);
+      if (!r.ok) {
+        const t = await r.text().catch(() => "");
+        throw new Error(/agent_id/i.test(t)
+          ? "Sua função exige um Agent ID. Preencha o campo Agent ID."
+          : `${r.status} ${t.slice(0, 140)}`);
+      }
       setTestStatus("ok");
       toast.success("Conexão funcionando");
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setTestStatus("err");
-      toast.error("Falha na conexão");
+      toast.error(e?.message || "Falha na conexão");
     }
   };
 
@@ -313,6 +325,10 @@ export function SettingsPanel({
             </label>
             <label>Edge Function
               <input value={draft.functionName} onChange={(e) => update("functionName", e.target.value)} />
+            </label>
+            <label>Agent ID (se a sua função exigir)
+              <input value={draft.agentId} placeholder="ex.: meu-agente"
+                onChange={(e) => update("agentId", e.target.value)} />
             </label>
             <label>Session ID
               <input value={draft.sessionId} onChange={(e) => update("sessionId", e.target.value)} />
