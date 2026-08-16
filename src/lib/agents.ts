@@ -18,7 +18,10 @@ export type AgentConfig = {
   method?: "POST" | "GET";
   /** Extra headers as "Name: value" lines. */
   headers?: string;
+  /** Sent as agent_id in the request body (required by some backends). */
+  agentId?: string;
 };
+
 
 const AGENTS_KEY = "agent.agents.v1";
 const ACTIVE_KEY = "agent.activeAgent.v1";
@@ -92,7 +95,13 @@ export async function sendToAgent(
   message: string,
   sessionId: string,
 ): Promise<AgentReply> {
-  const payload = { message, session_id: sessionId };
+  const agentId = (agent.agentId || "").trim();
+  const payload: Record<string, unknown> = { message, session_id: sessionId };
+  if (agentId) {
+    payload.agent_id = agentId;
+    payload.agentId = agentId;
+  }
+
   const url = resolveAgentUrl(agent);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -109,11 +118,12 @@ export async function sendToAgent(
   try {
     res = await fetch(
       method === "GET"
-        ? `${url}${url.includes("?") ? "&" : "?"}message=${encodeURIComponent(message)}&session_id=${encodeURIComponent(sessionId)}`
+        ? `${url}${url.includes("?") ? "&" : "?"}message=${encodeURIComponent(message)}&session_id=${encodeURIComponent(sessionId)}${agentId ? `&agent_id=${encodeURIComponent(agentId)}` : ""}`
         : url,
       method === "GET"
         ? { method, headers }
         : { method, headers, body: JSON.stringify(payload) },
+
     );
   } catch {
     throw new Error(
@@ -136,7 +146,12 @@ export async function sendToAgent(
 
 function explainStatus(status: number, body: string) {
   const extra = body ? ` — ${body.slice(0, 160)}` : "";
+  if (status === 400 && /agent_id/i.test(body))
+    return `Sua função exige um "agent_id". Preencha o campo Agent ID nas configurações deste agente.${extra}`;
+  if (status === 400)
+    return `A função recusou o formato do pedido (400). Envio { message, session_id, agent_id }.${extra}`;
   if (status === 401 || status === 403)
+
     return `Chave inválida ou função exigindo login (${status}). Cole a anon key correta ou desative "Verify JWT" na função.${extra}`;
   if (status === 404)
     return `Função não encontrada (404). Confira o nome da função ou cole a URL completa.${extra}`;
