@@ -326,6 +326,10 @@ export function SettingsPanel({
             <label>Edge Function
               <input value={draft.functionName} onChange={(e) => update("functionName", e.target.value)} />
             </label>
+            <label>Agent ID (se a sua função exigir)
+              <input value={draft.agentId} placeholder="ex.: meu-agente"
+                onChange={(e) => update("agentId", e.target.value)} />
+            </label>
             <label>Session ID
               <input value={draft.sessionId} onChange={(e) => update("sessionId", e.target.value)} />
             </label>
