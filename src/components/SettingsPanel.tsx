@@ -239,7 +239,26 @@ export function SettingsPanel({
                     <small style={{ opacity: 0.7 }}>O servidor Python precisa liberar CORS para este site.</small>
                   </>
                 )}
+                <button className="btn-primary" disabled={agentTest[a.id] === "loading"}
+                  onClick={async () => {
+                    setAgentTest((s) => ({ ...s, [a.id]: "loading" }));
+                    try {
+                      const { url, reply } = await testAgent(a, settings.sessionId);
+                      setAgentTest((s) => ({ ...s, [a.id]: "ok" }));
+                      toast.success(`Conectado: ${url}`, {
+                        description: reply.text ? reply.text.slice(0, 120) : undefined,
+                      });
+                    } catch (err) {
+                      setAgentTest((s) => ({ ...s, [a.id]: "err" }));
+                      toast.error(err instanceof Error ? err.message : "Falha ao conectar");
+                    }
+                  }}>
+                  {agentTest[a.id] === "loading" ? "Testando…" : "Testar este agente"}
+                  {agentTest[a.id] === "ok" && <span className="check ok">✓</span>}
+                  {agentTest[a.id] === "err" && <span className="check err">✕</span>}
+                </button>
               </div>
+
             ))}
             <button className="btn-ghost" onClick={() => {
               const a: AgentConfig = {
