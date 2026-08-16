@@ -95,7 +95,13 @@ export async function sendToAgent(
   message: string,
   sessionId: string,
 ): Promise<AgentReply> {
-  const payload = { message, session_id: sessionId };
+  const agentId = (agent.agentId || "").trim();
+  const payload: Record<string, unknown> = { message, session_id: sessionId };
+  if (agentId) {
+    payload.agent_id = agentId;
+    payload.agentId = agentId;
+  }
+
   const url = resolveAgentUrl(agent);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
