@@ -118,11 +118,12 @@ export async function sendToAgent(
   try {
     res = await fetch(
       method === "GET"
-        ? `${url}${url.includes("?") ? "&" : "?"}message=${encodeURIComponent(message)}&session_id=${encodeURIComponent(sessionId)}`
+        ? `${url}${url.includes("?") ? "&" : "?"}message=${encodeURIComponent(message)}&session_id=${encodeURIComponent(sessionId)}${agentId ? `&agent_id=${encodeURIComponent(agentId)}` : ""}`
         : url,
       method === "GET"
         ? { method, headers }
         : { method, headers, body: JSON.stringify(payload) },
+
     );
   } catch {
     throw new Error(
