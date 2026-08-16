@@ -18,7 +18,10 @@ export type AgentConfig = {
   method?: "POST" | "GET";
   /** Extra headers as "Name: value" lines. */
   headers?: string;
+  /** Sent as agent_id in the request body (required by some backends). */
+  agentId?: string;
 };
+
 
 const AGENTS_KEY = "agent.agents.v1";
 const ACTIVE_KEY = "agent.activeAgent.v1";
