@@ -47,6 +47,8 @@ export function SettingsPanel({
   const [memLimit, setMemLimit] = useState(20);
   const [factsText, setFactsText] = useState("");
   const [kokoroStatus, setKokoroStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const [agentTest, setAgentTest] = useState<Record<string, "idle" | "loading" | "ok" | "err">>({});
+
 
   useEffect(() => {
     if (!open) return;
