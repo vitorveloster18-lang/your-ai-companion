@@ -146,7 +146,12 @@ export async function sendToAgent(
 
 function explainStatus(status: number, body: string) {
   const extra = body ? ` — ${body.slice(0, 160)}` : "";
+  if (status === 400 && /agent_id/i.test(body))
+    return `Sua função exige um "agent_id". Preencha o campo Agent ID nas configurações deste agente.${extra}`;
+  if (status === 400)
+    return `A função recusou o formato do pedido (400). Envio { message, session_id, agent_id }.${extra}`;
   if (status === 401 || status === 403)
+
     return `Chave inválida ou função exigindo login (${status}). Cole a anon key correta ou desative "Verify JWT" na função.${extra}`;
   if (status === 404)
     return `Função não encontrada (404). Confira o nome da função ou cole a URL completa.${extra}`;
