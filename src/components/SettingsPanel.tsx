@@ -10,7 +10,9 @@ import {
   type AgentConfig,
   agentLabel,
   newAgentId,
+  testAgent,
 } from "@/lib/agents";
+
 import { KOKORO_LOCAL_VOICES } from "@/lib/kokoro-local";
 import {
   clearHistory,
@@ -45,6 +47,8 @@ export function SettingsPanel({
   const [memLimit, setMemLimit] = useState(20);
   const [factsText, setFactsText] = useState("");
   const [kokoroStatus, setKokoroStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
+  const [agentTest, setAgentTest] = useState<Record<string, "idle" | "loading" | "ok" | "err">>({});
+
 
   useEffect(() => {
     if (!open) return;
@@ -204,21 +208,25 @@ export function SettingsPanel({
                     <option value="local">Local / Python</option>
                   </select>
                 </label>
-                <label>{a.type === "supabase" ? "Project URL" : "Endpoint URL"}
-                  <input value={a.url} placeholder={a.type === "supabase" ? "https://xxx.supabase.co" : "http://localhost:8000/chat"}
+                <label>{a.type === "supabase" ? "URL da função (cole a URL completa)" : "Endpoint URL"}
+                  <input value={a.url}
+                    placeholder={a.type === "supabase"
+                      ? "https://xxxx.supabase.co/functions/v1/chat"
+                      : "http://localhost:8000/chat"}
                     onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, url: e.target.value } : x))} />
                 </label>
                 {a.type === "supabase" ? (
                   <>
-                    <label>Anon Key
-                      <input value={a.key || ""}
+                    <label>Anon Key (opcional se a função for pública)
+                      <input value={a.key || ""} placeholder="eyJhbGciOi..."
                         onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, key: e.target.value } : x))} />
                     </label>
-                    <label>Edge Function
-                      <input value={a.functionName || "chat"}
-                        onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, functionName: e.target.value } : x))} />
-                    </label>
+                    <small style={{ opacity: 0.7 }}>
+                      Pode colar só <b>https://xxxx.supabase.co</b> (uso a função “chat”) ou o
+                      endereço completo da função. A função precisa liberar CORS.
+                    </small>
                   </>
+
                 ) : (
                   <>
                     <label>Método
@@ -235,7 +243,26 @@ export function SettingsPanel({
                     <small style={{ opacity: 0.7 }}>O servidor Python precisa liberar CORS para este site.</small>
                   </>
                 )}
+                <button className="btn-primary" disabled={agentTest[a.id] === "loading"}
+                  onClick={async () => {
+                    setAgentTest((s) => ({ ...s, [a.id]: "loading" }));
+                    try {
+                      const { url, reply } = await testAgent(a, settings.sessionId);
+                      setAgentTest((s) => ({ ...s, [a.id]: "ok" }));
+                      toast.success(`Conectado: ${url}`, {
+                        description: reply.text ? reply.text.slice(0, 120) : undefined,
+                      });
+                    } catch (err) {
+                      setAgentTest((s) => ({ ...s, [a.id]: "err" }));
+                      toast.error(err instanceof Error ? err.message : "Falha ao conectar");
+                    }
+                  }}>
+                  {agentTest[a.id] === "loading" ? "Testando…" : "Testar este agente"}
+                  {agentTest[a.id] === "ok" && <span className="check ok">✓</span>}
+                  {agentTest[a.id] === "err" && <span className="check err">✕</span>}
+                </button>
               </div>
+
             ))}
             <button className="btn-ghost" onClick={() => {
               const a: AgentConfig = {
