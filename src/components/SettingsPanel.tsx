@@ -204,21 +204,25 @@ export function SettingsPanel({
                     <option value="local">Local / Python</option>
                   </select>
                 </label>
-                <label>{a.type === "supabase" ? "Project URL" : "Endpoint URL"}
-                  <input value={a.url} placeholder={a.type === "supabase" ? "https://xxx.supabase.co" : "http://localhost:8000/chat"}
+                <label>{a.type === "supabase" ? "URL da função (cole a URL completa)" : "Endpoint URL"}
+                  <input value={a.url}
+                    placeholder={a.type === "supabase"
+                      ? "https://xxxx.supabase.co/functions/v1/chat"
+                      : "http://localhost:8000/chat"}
                     onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, url: e.target.value } : x))} />
                 </label>
                 {a.type === "supabase" ? (
                   <>
-                    <label>Anon Key
-                      <input value={a.key || ""}
+                    <label>Anon Key (opcional se a função for pública)
+                      <input value={a.key || ""} placeholder="eyJhbGciOi..."
                         onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, key: e.target.value } : x))} />
                     </label>
-                    <label>Edge Function
-                      <input value={a.functionName || "chat"}
-                        onChange={(e) => onAgentsChange(agents.map((x) => x.id === a.id ? { ...x, functionName: e.target.value } : x))} />
-                    </label>
+                    <small style={{ opacity: 0.7 }}>
+                      Pode colar só <b>https://xxxx.supabase.co</b> (uso a função “chat”) ou o
+                      endereço completo da função. A função precisa liberar CORS.
+                    </small>
                   </>
+
                 ) : (
                   <>
                     <label>Método
