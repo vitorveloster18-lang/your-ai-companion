@@ -74,27 +74,19 @@ export function SettingsPanel({
   const testConnection = async () => {
     setTestStatus("loading");
     try {
-      const url = `${draft.supabaseUrl}/functions/v1/${draft.functionName}`;
-      const agentId = (draft.agentId || "").trim();
-      const body: Record<string, unknown> = { message: "hello", session_id: draft.sessionId };
-      if (agentId) { body.agent_id = agentId; body.agentId = agentId; }
-      const r = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${draft.supabaseKey}`,
-          apikey: draft.supabaseKey,
-        },
-        body: JSON.stringify(body),
-      });
-      if (!r.ok) {
-        const t = await r.text().catch(() => "");
-        throw new Error(/agent_id/i.test(t)
-          ? "Sua função exige um Agent ID. Preencha o campo Agent ID."
-          : `${r.status} ${t.slice(0, 140)}`);
-      }
+      await testAgent({
+        id: "default-connection",
+        name: "Conexão padrão",
+        type: "supabase",
+        url: draft.supabaseUrl,
+        key: draft.supabaseKey,
+        functionName: draft.functionName,
+        agentId: draft.agentId,
+      }, draft.sessionId);
+      saveSettings(draft);
+      onChange(draft);
       setTestStatus("ok");
-      toast.success("Conexão funcionando");
+      toast.success("Conexão funcionando e salva");
     } catch (e: any) {
       console.error(e);
       setTestStatus("err");
