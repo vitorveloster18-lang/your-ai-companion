@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Settings as SettingsIcon } from "lucide-react";
+import { toast } from "sonner";
 import "../styles/agent.css";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { AvatarStage, type AvatarStageHandle } from "@/components/AvatarStage";
@@ -209,34 +210,18 @@ function AgentPage() {
       const context = buildContext(memoryId);
       const payloadText = context ? `${context}\n\nMensagem atual: ${text}` : text;
 
-      if (agent) {
-        const reply = await sendToAgent(agent, payloadText, s.sessionId);
-        replyText = reply.text;
-        apiEmotion = reply.emotion as VideoKey | undefined;
-      } else {
-        const url = `${s.supabaseUrl}/functions/v1/${s.functionName}`;
-        const aid = (s.agentId || "").trim();
-        const body: Record<string, unknown> = { message: payloadText, session_id: s.sessionId };
-        if (aid) { body.agent_id = aid; body.agentId = aid; }
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${s.supabaseKey}`,
-            apikey: s.supabaseKey,
-          },
-          body: JSON.stringify(body),
-        });
-        if (!response.ok) {
-          const t = await response.text().catch(() => "");
-          throw new Error(/agent_id/i.test(t)
-            ? "Sua função exige um Agent ID. Preencha o campo Agent ID em Configurações › Conexão."
-            : `Erro na API (${response.status})`);
-        }
-        const data = await response.json();
-        replyText = data.response || data.text || data.reply || "";
-        apiEmotion = data.emotion;
-      }
+      const targetAgent: AgentConfig = agent || {
+        id: "default",
+        name: "Conexão padrão",
+        type: "supabase",
+        url: s.supabaseUrl,
+        key: s.supabaseKey,
+        functionName: s.functionName,
+        agentId: s.agentId,
+      };
+      const reply = await sendToAgent(targetAgent, payloadText, s.sessionId);
+      replyText = reply.text;
+      apiEmotion = reply.emotion as VideoKey | undefined;
       addBubble(replyText, "agent");
       appendHistory(memoryId, { role: "agent", text: replyText, ts: Date.now() });
 
@@ -267,7 +252,9 @@ function AgentPage() {
       setMood(null);
     } catch (e) {
       console.error(e);
-      addBubble("Algo deu errado. Tente novamente.", "agent");
+      const message = e instanceof Error ? e.message : "Não foi possível falar com o agente.";
+      addBubble(message, "agent");
+      toast.error("O agente não respondeu", { description: message });
       await hideState();
       await playTransition("speaking_to_standby");
       setAgentState("standby");
@@ -307,7 +294,15 @@ function AgentPage() {
       sendMessage(text);
     };
     recognition.onend = () => stopListening();
-    recognition.onerror = () => stopListening();
+    recognition.onerror = (event: { error?: string }) => {
+      stopListening();
+      const message = event.error === "not-allowed"
+        ? "Permita o acesso ao microfone nas configurações do navegador."
+        : event.error === "no-speech"
+          ? "Não ouvi nenhuma fala. Tente novamente mais perto do microfone."
+          : "Não foi possível reconhecer sua fala. Você também pode digitar a mensagem.";
+      toast.error("Microfone indisponível", { description: message });
+    };
     recognitionRef.current = recognition;
     recognition.start();
   };

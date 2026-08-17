@@ -68,6 +68,42 @@ function parseHeaders(raw?: string): Record<string, string> {
 
 export type AgentReply = { text: string; emotion?: string };
 
+function extractReply(data: unknown): AgentReply {
+  if (typeof data === "string") return { text: data };
+  if (!data || typeof data !== "object") return { text: "" };
+
+  const record = data as Record<string, unknown>;
+  const nested = record.data && typeof record.data === "object"
+    ? record.data as Record<string, unknown>
+    : undefined;
+  const choices = Array.isArray(record.choices) ? record.choices : [];
+  const firstChoice = choices[0] && typeof choices[0] === "object"
+    ? choices[0] as Record<string, unknown>
+    : undefined;
+  const choiceMessage = firstChoice?.message && typeof firstChoice.message === "object"
+    ? firstChoice.message as Record<string, unknown>
+    : undefined;
+
+  const candidates = [
+    record.response,
+    record.text,
+    record.reply,
+    record.answer,
+    record.output,
+    record.content,
+    nested?.response,
+    nested?.text,
+    nested?.reply,
+    nested?.answer,
+    choiceMessage?.content,
+  ];
+  const text = candidates.find((value) => typeof value === "string" && value.trim());
+  return {
+    text: typeof text === "string" ? text.trim() : "",
+    emotion: typeof record.emotion === "string" ? record.emotion : undefined,
+  };
+}
+
 /**
  * Accepts anything the user pastes and returns the final endpoint URL:
  * - https://xxx.supabase.co                      -> + /functions/v1/<fn|chat>
@@ -137,11 +173,12 @@ export async function sendToAgent(
   }
   const ct = res.headers.get("content-type") || "";
   if (!ct.includes("json")) return { text: await res.text() };
-  const data = await res.json();
-  return {
-    text: data.response ?? data.text ?? data.reply ?? data.message ?? "",
-    emotion: data.emotion,
-  };
+  const data: unknown = await res.json();
+  const reply = extractReply(data);
+  if (!reply.text) {
+    throw new Error("O agente respondeu, mas não enviou texto. Use response, text, reply, answer ou output no JSON da função.");
+  }
+  return reply;
 }
 
 function explainStatus(status: number, body: string) {
