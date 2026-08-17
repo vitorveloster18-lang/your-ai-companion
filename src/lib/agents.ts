@@ -114,6 +114,9 @@ function extractReply(data: unknown): AgentReply {
 export function resolveAgentUrl(agent: AgentConfig): string {
   let raw = (agent.url || "").trim().replace(/\/+$/, "");
   if (!raw) throw new Error("Informe a URL do agente.");
+  if (/SEU-PROJETO|SUA-URL|example\.com/i.test(raw)) {
+    throw new Error("A conexão ainda está com a URL de exemplo. Abra Configurações › Agentes e cole a URL real da sua função.");
+  }
   if (agent.type === "local") {
     if (!/^https?:\/\//i.test(raw)) raw = `http://${raw}`;
     return raw;
@@ -132,6 +135,9 @@ export async function sendToAgent(
   sessionId: string,
 ): Promise<AgentReply> {
   const agentId = (agent.agentId || "").trim();
+  if (agent.type === "supabase" && agent.key && /SUA-CHAVE|SUA_CHAVE/i.test(agent.key)) {
+    throw new Error("A conexão ainda está com a chave de exemplo. Informe a chave real em Configurações › Agentes.");
+  }
   const payload: Record<string, unknown> = { message, session_id: sessionId };
   if (agentId) {
     payload.agent_id = agentId;

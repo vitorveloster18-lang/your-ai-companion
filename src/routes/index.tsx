@@ -100,8 +100,14 @@ function AgentPage() {
 
   // Load agents from local storage
   useEffect(() => {
-    setAgents(loadAgents());
-    setActiveAgentId(loadActiveAgentId());
+    const savedAgents = loadAgents();
+    const savedActiveId = loadActiveAgentId();
+    const validActiveId = savedAgents.some((item) => item.id === savedActiveId)
+      ? savedActiveId
+      : savedAgents[0]?.id || null;
+    setAgents(savedAgents);
+    setActiveAgentId(validActiveId);
+    if (validActiveId !== savedActiveId) saveActiveAgentId(validActiveId);
   }, []);
 
   const updateAgents = useCallback((list: AgentConfig[]) => {
@@ -195,7 +201,9 @@ function AgentPage() {
     setInput("");
     setMood(null);
 
-    const agent = agentsRef.current.find((a) => a.id === activeAgentIdRef.current) || null;
+    const agent = agentsRef.current.find((a) => a.id === activeAgentIdRef.current)
+      || agentsRef.current[0]
+      || null;
     const memoryId = agent?.id || "default";
     appendHistory(memoryId, { role: "user", text, ts: Date.now() });
 
